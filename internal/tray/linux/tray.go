@@ -30,17 +30,48 @@ import (
 	"github.com/wrfly/deepseek-panel/internal/traykit"
 )
 
-// IconPath 把托盘图标写入配置目录并返回路径。
-func IconPath(configDir string) string {
-	dir := filepath.Join(configDir, "deepseek-panel")
-	if err := os.MkdirAll(dir, 0o755); err != nil {
+// IconName 托盘图标在图标主题中的名称。
+const IconName = "deepseek-panel"
+
+// InstallIcon 把托盘图标安装到用户图标主题（~/.local/share/icons/hicolor），
+// 返回供 AppIndicator 使用的图标名；失败时返回空串（AppIndicator 仍可显示标题）。
+func InstallIcon(configDir string) string {
+	home, err := os.UserHomeDir()
+	if err != nil {
 		return ""
 	}
-	path := filepath.Join(dir, "whale.png")
-	if err := os.WriteFile(path, icon.PNG, 0o644); err != nil {
+	// 也保留一份在配置目录，便于排查。
+	cfgDir := filepath.Join(configDir, "deepseek-panel")
+	if err := os.MkdirAll(cfgDir, 0o755); err != nil {
 		return ""
 	}
-	return path
+	_ = os.WriteFile(filepath.Join(cfgDir, "whale.png"), icon.PNG, 0o644)
+
+	// hicolor 主题是 GTK 的默认回退主题，无需 index.theme 也能被找到。
+	installed := false
+	sizes := []struct {
+		dir  string
+		data []byte
+	}{
+		{"22x22", icon.PNG22},
+		{"24x24", icon.PNG24},
+		{"32x32", icon.PNG32},
+		{"48x48", icon.PNG48},
+		{"64x64", icon.PNG64},
+	}
+	for _, s := range sizes {
+		dir := filepath.Join(home, ".local", "share", "icons", "hicolor", s.dir, "status")
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			continue
+		}
+		if err := os.WriteFile(filepath.Join(dir, IconName+".png"), s.data, 0o644); err == nil {
+			installed = true
+		}
+	}
+	if !installed {
+		return ""
+	}
+	return IconName
 }
 
 type linuxTray struct {
@@ -52,7 +83,7 @@ type linuxTray struct {
 	started  bool
 }
 
-// New 创建 Linux 托盘。
+// New 创建 Linux 托盘。iconPath 为 AppIndicator 图标名（InstallIcon 的返回值）。
 func New(handlers traykit.Handlers, iconPath string) traykit.Tray {
 	return &linuxTray{handlers: handlers, iconPath: iconPath}
 }

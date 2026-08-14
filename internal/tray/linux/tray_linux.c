@@ -28,6 +28,7 @@ static GtkWidget *append_item(const char *label, GCallback cb) {
 
 static gboolean do_start(gpointer data) {
     StartData *sd = (StartData *)data;
+    fprintf(stderr, "TRAY-DEBUG: do_start entered\n");
     g_menu = GTK_MENU(gtk_menu_new());
     append_item("打开面板", G_CALLBACK(trayOpenClicked));
     append_item("设置", G_CALLBACK(traySettingsClicked));
@@ -48,6 +49,7 @@ static gboolean do_start(gpointer data) {
     }
     app_indicator_set_status(g_indicator, APP_INDICATOR_STATUS_ACTIVE);
     app_indicator_set_menu(g_indicator, GTK_MENU(g_menu));
+    fprintf(stderr, "TRAY-DEBUG: indicator created status=ACTIVE\n");
     g_free(sd->icon_path);
     g_free(sd->title);
     g_free(sd->tooltip);
