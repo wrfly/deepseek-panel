@@ -7,6 +7,7 @@ final class StatusBarController: NSObject {
         var report = UsageReport()
         var errorMessage: String?
         var lastUpdated: Date?
+        var mockHeatmap: [[HeatmapCell]]?
     }
 
     private let statusItem: NSStatusItem
@@ -94,6 +95,7 @@ final class StatusBarController: NSObject {
         let now = Date()
         let window = period.window(now: now)
         let tz = TimeZone.current.secondsFromGMT(for: now)
+        snapshot.mockHeatmap = nil
 
         if useMock {
             let (summary, keys, amount, cost) = MockData.fetch(window: window, tz: tz)
@@ -107,7 +109,11 @@ final class StatusBarController: NSObject {
             )
             snapshot.errorMessage = nil
             snapshot.lastUpdated = now
-            populateMockHeatmap(tz: tz)
+            // mock 数据只进内存，绝不写入持久化 TrendStore，避免污染真实数据。
+            snapshot.mockHeatmap = Self.buildMockHeatmap(
+                tz: tz,
+                currency: AppSettings.displayCurrency
+            )
             refreshPanel()
             return
         }
@@ -274,27 +280,56 @@ final class StatusBarController: NSObject {
         TrendStore.replaceRange(Array(byTime.values), start: start, end: end)
     }
 
-    /// mock 模式也填充最近 24 周（与热力图范围一致）的缓存，便于离线测试 UI。
-    private func populateMockHeatmap(tz: Int) {
+    /// 生成 mock 模式的 24 周热力图数据（纯内存，绝不落盘，避免污染真实缓存）。
+    private static func buildMockHeatmap(tz: Int, currency: String) -> [[HeatmapCell]] {
         let calendar = Calendar.current
-        let todayStart = calendar.startOfDay(for: Date())
-        for offset in 0..<(24 * 7) {
-            guard let day = calendar.date(byAdding: .day, value: -offset, to: todayStart) else {
-                continue
-            }
-            let start = Int(day.timeIntervalSince1970)
-            let end = start + 86400
-            // 已缓存的天不再重复生成（幂等）。
-            if TrendStore.coverageCount(from: start, to: end) >= 24 { continue }
-            let mockWindow = StatsWindow(
-                filterStart: start,
-                filterEnd: end,
-                requestStart: start,
-                requestEnd: end
-            )
-            let (_, _, amount, cost) = MockData.fetch(window: mockWindow, tz: tz)
-            Self.mergeRange(amount: amount, cost: cost, start: start, end: end)
+        let today = calendar.startOfDay(for: Date())
+        let weekday = calendar.component(.weekday, from: today)
+        let daysSinceMonday = (weekday + 5) % 7
+        guard let thisMonday = calendar.date(byAdding: .day, value: -daysSinceMonday, to: today),
+              let firstMonday = calendar.date(byAdding: .weekOfYear, value: -23, to: thisMonday) else {
+            return []
         }
+
+        var rows: [[HeatmapCell]] = []
+        for weekdayIndex in 0..<7 {  // 0=周一 … 6=周日
+            var row: [HeatmapCell] = []
+            for week in 0..<24 {
+                guard let day = calendar.date(byAdding: .day, value: week * 7 + weekdayIndex, to: firstMonday) else {
+                    row.append(HeatmapCell(tokens: 0, cost: 0))
+                    continue
+                }
+                let start = Int(day.timeIntervalSince1970)
+                let end = start + 86400
+                let mockWindow = StatsWindow(
+                    filterStart: start,
+                    filterEnd: end,
+                    requestStart: start,
+                    requestEnd: end
+                )
+                let (_, _, amount, cost) = MockData.fetch(window: mockWindow, tz: tz)
+
+                var tokens = 0
+                for series in amount.series {
+                    for bucket in series.buckets where bucket.time >= start && bucket.time < end {
+                        tokens += (bucket.usage.responseToken ?? 0)
+                            + (bucket.usage.promptCacheHitToken ?? 0)
+                            + (bucket.usage.promptCacheMissToken ?? 0)
+                    }
+                }
+                var costValue = 0.0
+                for currencySeries in cost.data ?? [] where currencySeries.currency == currency {
+                    for series in currencySeries.series {
+                        for bucket in series.buckets where bucket.time >= start && bucket.time < end {
+                            costValue += Double(bucket.cost) ?? 0
+                        }
+                    }
+                }
+                row.append(HeatmapCell(tokens: tokens, cost: costValue))
+            }
+            rows.append(row)
+        }
+        return rows
     }
 
     /// 图表数据 = 本地小时缓存 + 未缓存日期的远程日粒度点。
@@ -316,7 +351,8 @@ final class StatusBarController: NSObject {
             currency: AppSettings.displayCurrency,
             periodTitle: AppSettings.period.title,
             lastUpdated: snapshot.lastUpdated,
-            errorMessage: snapshot.errorMessage
+            errorMessage: snapshot.errorMessage,
+            heatmap: snapshot.mockHeatmap
         )
         updateButtonTitle()
     }

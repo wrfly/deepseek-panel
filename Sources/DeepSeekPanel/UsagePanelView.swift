@@ -1,5 +1,11 @@
 import AppKit
 
+/// 热力图单个格子（某一天）的聚合数据。
+struct HeatmapCell {
+    let tokens: Int
+    let cost: Double
+}
+
 /// Kaboo 风格用量面板：大数字头卡 + 按模型/按 Key 拆分 + 趋势图。
 /// 全部自定义绘制，明暗模式自适应。
 final class UsagePanelView: NSView {
@@ -91,12 +97,6 @@ final class UsagePanelView: NSView {
     }
     private static let heatmapLabelWidth: CGFloat = 28
 
-    /// 热力图单个格子（某一天）的聚合数据。
-    private struct HeatmapCell {
-        let tokens: Int
-        let cost: Double
-    }
-
     /// 各 Key / 模型的识别色，依次轮转，系统色自动适配明暗模式。
     private static let palette: [NSColor] = [
         .systemBlue, .systemPurple, .systemTeal, .systemOrange,
@@ -124,6 +124,7 @@ final class UsagePanelView: NSView {
     private var heatmapTrackingArea: NSTrackingArea?
     private var hoveredHeatmap: (row: Int, col: Int)?
     private var heatmapCache: [[HeatmapCell]]?
+    private var overrideHeatmap: [[HeatmapCell]]?
 
     override var isFlipped: Bool { true }
 
@@ -163,7 +164,8 @@ final class UsagePanelView: NSView {
         currency: String,
         periodTitle: String,
         lastUpdated: Date?,
-        errorMessage: String?
+        errorMessage: String?,
+        heatmap: [[HeatmapCell]]? = nil
     ) {
         self.summary = summary
         self.report = report
@@ -171,6 +173,7 @@ final class UsagePanelView: NSView {
         self.periodTitle = periodTitle
         self.lastUpdated = lastUpdated
         self.errorMessage = errorMessage
+        self.overrideHeatmap = heatmap
         heatmapCache = nil
 
         let metrics = Self.metrics(
@@ -723,6 +726,7 @@ final class UsagePanelView: NSView {
 
     /// 最近 24 周，每天一格；聚合每天的 token 与费用。返回 [星期 0..6][周 0..23]。
     private func heatmapData() -> [[HeatmapCell]] {
+        if let override = overrideHeatmap { return override }
         if let cache = heatmapCache { return cache }
         let calendar = Calendar.current
         let today = calendar.startOfDay(for: Date())
