@@ -51,7 +51,7 @@ type Envelope struct {
 	Data *struct {
 		BizCode int             `json:"bizCode"`
 		BizMsg  string          `json:"bizMsg"`
-		BizData json.RawMessage `json:"bizData"`
+		BizData json.RawMessage `json:"biz_data"`
 	} `json:"data"`
 }
 

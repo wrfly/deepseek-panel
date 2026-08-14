@@ -6,7 +6,7 @@ package deepseek
 type Wallet struct {
 	Currency        string  `json:"currency"`
 	Balance         string  `json:"balance"`
-	TokenEstimation *string `json:"tokenEstimation"`
+	TokenEstimation *string `json:"token_estimation"`
 }
 
 // CostTotal 累计消耗。
@@ -17,30 +17,30 @@ type CostTotal struct {
 
 // UserSummary get_user_summary 的 bizData。
 type UserSummary struct {
-	NormalWallets []Wallet    `json:"normalWallets"`
-	BonusWallets  []Wallet    `json:"bonusWallets"`
-	TotalCosts    []CostTotal `json:"totalCosts"`
+	NormalWallets []Wallet    `json:"normal_wallets"`
+	BonusWallets  []Wallet    `json:"bonus_wallets"`
+	TotalCosts    []CostTotal `json:"total_costs"`
 }
 
 // APIKeyInfo 单个 API Key 信息。
 type APIKeyInfo struct {
-	CreatedAt   *int   `json:"createdAt"`
-	LastUse     *int   `json:"lastUse"`
-	TrackingID  string `json:"trackingId"`
-	SensitiveID string `json:"sensitiveId"`
+	CreatedAt   *int   `json:"created_at"`
+	LastUse     *int   `json:"last_use"`
+	TrackingID  string `json:"tracking_id"`
+	SensitiveID string `json:"sensitive_id"`
 	Name        string `json:"name"`
 }
 
 // APIKeyList get_api_keys 的 bizData。
 type APIKeyList struct {
-	APIKeys []APIKeyInfo `json:"apiKeys"`
+	APIKeys []APIKeyInfo `json:"api_keys"`
 }
 
 // SeriesKey 用量序列对应的 Key。
 type SeriesKey struct {
-	TrackingID  string `json:"trackingId"`
+	TrackingID  string `json:"tracking_id"`
 	Name        string `json:"name"`
-	SensitiveID string `json:"sensitiveId"`
+	SensitiveID string `json:"sensitive_id"`
 	Valid       *bool  `json:"valid"`
 }
 
@@ -48,9 +48,9 @@ type SeriesKey struct {
 // 注意：平台 JSON 中请求数键为大写 REQUEST，其余为 camelCase。
 type TokenUsage struct {
 	Request              *int `json:"REQUEST"`
-	ResponseToken        *int `json:"responseToken"`
-	PromptCacheHitToken  *int `json:"promptCacheHitToken"`
-	PromptCacheMissToken *int `json:"promptCacheMissToken"`
+	ResponseToken        *int `json:"RESPONSE_TOKEN"`
+	PromptCacheHitToken  *int `json:"PROMPT_CACHE_HIT_TOKEN"`
+	PromptCacheMissToken *int `json:"PROMPT_CACHE_MISS_TOKEN"`
 }
 
 // AmountBucket 按小时聚合的 Token 用量桶。
@@ -61,7 +61,7 @@ type AmountBucket struct {
 
 // AmountSeries 单个 Key+模型 的 Token 用量序列。
 type AmountSeries struct {
-	APIKey  SeriesKey      `json:"apiKey"`
+	APIKey  SeriesKey      `json:"api_key"`
 	Model   string         `json:"model"`
 	Buckets []AmountBucket `json:"buckets"`
 }
@@ -83,7 +83,7 @@ type CostBucket struct {
 
 // CostSeries 单个 Key+模型 的费用序列。
 type CostSeries struct {
-	APIKey  SeriesKey    `json:"apiKey"`
+	APIKey  SeriesKey    `json:"api_key"`
 	Model   string       `json:"model"`
 	Buckets []CostBucket `json:"buckets"`
 }

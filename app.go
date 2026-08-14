@@ -151,6 +151,17 @@ func (a *App) Startup(ctx context.Context) {
 	go a.consumeNav()
 	go a.refresh()
 	go a.loop()
+
+	// 调试：打印窗口状态
+	go func() {
+		time.Sleep(3 * time.Second)
+		if os.Getenv("DEEPSEEK_PANEL_DEBUG") == "1" {
+			x, y := wailsruntime.WindowGetPosition(ctx)
+			w, h := wailsruntime.WindowGetSize(ctx)
+			fmt.Fprintf(os.Stderr, "DEBUG window: pos=(%d,%d) size=(%dx%d) minimized=%v\n",
+				x, y, w, h, wailsruntime.WindowIsMinimised(ctx))
+		}
+	}()
 }
 
 // Shutdown wails.OnShutdown。
@@ -302,9 +313,21 @@ func (a *App) refresh() {
 		wailsruntime.EventsEmit(a.ctx, "snapshot", snap)
 	}
 	if os.Getenv("DEEPSEEK_PANEL_DEBUG") == "1" {
-		fmt.Fprintf(os.Stderr, "DEBUG snapshot: period=%s tokens=%d cost=%.2f keys=%d trend=%d heatmap=%d err=%q\n",
+		nonZero := 0
+		var maxV float64
+		for _, row := range snap.Heatmap {
+			for _, c := range row {
+				if c.Tokens > 0 || c.Cost > 0 {
+					nonZero++
+				}
+				if v := float64(c.Tokens); v > maxV {
+					maxV = v
+				}
+			}
+		}
+		fmt.Fprintf(os.Stderr, "DEBUG snapshot: period=%s tokens=%d cost=%.2f keys=%d trend=%d heatmap=%d nonZero=%d maxToken=%.0f err=%q\n",
 			snap.Period, snap.Report.TotalTokens, snap.Report.TotalCost,
-			len(snap.Report.Keys), len(snap.Report.Trend), len(snap.Heatmap), snap.ErrorMessage)
+			len(snap.Report.Keys), len(snap.Report.Trend), len(snap.Heatmap), nonZero, maxV, snap.ErrorMessage)
 	}
 }
 
@@ -372,6 +395,8 @@ func (a *App) ensureHourlyHistory(client *deepseek.Client, now time.Time, tz int
 	const totalDays = 24 * 7 // 168 天，与热力图 24 周一致
 
 	// 历史（不含今天）：从最远的 167 天往今天方向回填。
+	// 注意：start 必须是较早的日期、end 是较晚的日期（原 Swift 版此处参数反了，
+	// 导致历史批次被接口拒绝、热力图一直没有历史数据）。
 	earliestOffset := totalDays - 1
 	for earliestOffset > 0 {
 		batchDays := earliestOffset
@@ -380,8 +405,8 @@ func (a *App) ensureHourlyHistory(client *deepseek.Client, now time.Time, tz int
 		}
 		endOffset := earliestOffset
 		startOffset := earliestOffset - batchDays + 1
-		endDay := todayStart.AddDate(0, 0, -endOffset)
-		startDay := todayStart.AddDate(0, 0, -startOffset)
+		startDay := todayStart.AddDate(0, 0, -endOffset)
+		endDay := todayStart.AddDate(0, 0, -startOffset)
 		start := startDay.Unix()
 		end := endDay.Unix() + 86400
 		if a.trend.CoverageCount(start, end) < int64(batchDays)*24 {
@@ -406,29 +431,33 @@ func (a *App) shouldFetchTodayHourly(now time.Time) bool {
 }
 
 // fetchAndMergeRange 拉取 [start, end) 的 amount + cost 并合并进 TrendStore。
+// 注意：goroutine 无论成败都必须向通道发送结果，否则主协程会永久阻塞（死锁）。
 func (a *App) fetchAndMergeRange(client *deepseek.Client, start, end int64, tz int) {
 	type result struct {
 		amount *deepseek.UsageAmountData
 		cost   *deepseek.CostData
+		err    error
 	}
 	ch := make(chan result, 2)
 	go func() {
 		am, err := client.FetchAmount(start, end, tz)
-		if err == nil {
-			ch <- result{amount: am}
-		}
+		ch <- result{amount: am, err: err}
 	}()
 	go func() {
 		c, err := client.FetchCost(start, end, tz)
-		if err == nil {
-			ch <- result{cost: c}
-		}
+		ch <- result{cost: c, err: err}
 	}()
 
 	var amount *deepseek.UsageAmountData
 	var cost *deepseek.CostData
 	for i := 0; i < 2; i++ {
 		r := <-ch
+		if r.err != nil {
+			if os.Getenv("DEEPSEEK_PANEL_DEBUG") == "1" {
+				fmt.Fprintf(os.Stderr, "DEBUG backfill [%d,%d): %v\n", start, end, r.err)
+			}
+			continue
+		}
 		if r.amount != nil {
 			amount = r.amount
 		}
