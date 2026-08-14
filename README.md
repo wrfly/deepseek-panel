@@ -1,43 +1,71 @@
 # DeepSeek 用量面板
 
-> 🐋 本项目由 **DeepSeek V4 Pro + Codex** 独立编写完成。
+> 🐋 跨平台版（Go + Wails v2）：**一份代码，同时构建 macOS 与 Linux**。
+> 原 macOS 版（Swift/SwiftUI）已整体移植为 Go，功能与界面保持一致。
 
-一个 macOS 菜单栏小应用：在状态栏常驻显示 DeepSeek 平台余额，点击展开菜单查看每个 API Key 的用量与费用。
+一个桌面小应用：在系统托盘/菜单栏常驻显示 DeepSeek 平台余额，点击打开用量面板，查看每个 API Key 的用量与费用。
+
+## 平台差异
+
+| | macOS | Linux |
+| --- | --- | --- |
+| 常驻位置 | 菜单栏（NSStatusItem，🐋 + 余额，无 Dock 图标） | 系统托盘（AppIndicator，需桌面环境支持托盘，如 KDE / XFCE / GNOME+扩展） |
+| 面板 | 点击菜单栏 → 打开面板窗口 | 启动即显示面板窗口（托盘菜单可随时唤出） |
+| 再次启动 | 单实例，自动唤起已有窗口 | 单实例，第二个进程会通过 unix socket 唤醒已有窗口 |
+| Token 存储 | 本地文件（0600 权限，见下） | 本地文件（0600 权限） |
+
+> 注：原 Swift 版把 Token 存在 macOS 钥匙串里；跨平台合并版统一改为本地文件
+> `<配置目录>/deepseek-panel/token`（macOS 为 `~/Library/Application Support`，Linux 为 `~/.config`），权限 0600。
 
 ## 功能
 
-- 状态栏：🐋 logo + 当前余额（默认 CNY，可在设置切换 USD）
-- 点击展开一张用量面板：
+- 托盘/菜单栏：🐋 logo + 当前余额（默认 CNY，可在设置切换 USD）
+- 用量面板窗口：
   - 余额头卡：TOTAL TOKENS / EST. COST、缓存命中量与命中率
   - TOKENS BY MODEL / COST BY MODEL（带占比）
   - 费用趋势图：按小时/天展示，悬停查看具体数值，费用与 Token 可切换
-  - 各 Key 用量排行 + 费用分布饼图 + 缓存命中率
-- 历史消费本地缓存：自动按小时累积，回填最近 7 天，历史数据不重复远程拉取
-- 所有设置集中在「设置…」窗口：统计周期（今天 / 24 小时 / 7 天 / 本月）、
-  显示币种、刷新间隔、开机自启、本地模拟数据（离线测试）
-- Token 保存在 macOS 钥匙串（Keychain）中
+  - 各 Key 用量排行 + 费用分布饼图 + 缓存命中率标签
+  - 用量热力图：GitHub 风格，最近 24 周 × 7 天（按 Token 或按消耗）
+- 历史消费本地缓存：自动按小时累积，回填最近 168 天，历史数据不重复远程拉取
+- 所有设置集中在「设置」页：统计周期（今天 / 24 小时 / 7 天 / 本月）、
+  显示币种、刷新间隔、周期预算进度条、热力图指标、开机自启、本地模拟数据（离线测试）
 - 一键打开平台用量页面
 
-## 构建与安装
+## 构建
+
+### Linux
 
 ```bash
-make build      # 生成 dist/DeepSeekPanel.app
-make install    # 复制到 /Applications（开机自启功能建议放这里）
-make run        # 构建并启动
-make dump       # 无界面自测：拉取并打印余额/用量
+# 1) 依赖（Ubuntu/Debian，有 root 时）：
+sudo apt install libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev
+
+#    没有 root 时，运行脚本把开发包解压到用户目录（无需 sudo）：
+./scripts/setup-linux-deps.sh   # 之后按提示 export 两个 PKG_CONFIG 变量
+
+# 2) 构建：
+make build          # 产物 build/deepseek-panel
+make run            # 构建并运行
+make dump           # 无界面自测（DEEPSEEK_PANEL_MOCK=1 用离线模拟数据）
+sudo make install   # 安装到 /usr/local/bin
 ```
 
-应用无 Dock 图标，只在菜单栏显示。首次启动会使用内置的初始 Token；如果失效，点击菜单栏图标 → 设置…，粘贴新的 Token 后保存。
+### macOS
 
-## 关于 Token
+在 macOS 上执行（需要 Xcode Command Line Tools）：
 
-本应用使用的是 DeepSeek 平台网页会话的 Bearer Token（不是 `sk-` 开头的 API Key）。获取方式：
+```bash
+make mac            # 生成 build/DeepSeekPanel.app（LSUIElement：仅菜单栏）
+cp -r build/DeepSeekPanel.app /Applications/
+```
 
-1. 浏览器登录 <https://platform.deepseek.com>
-2. 打开用量页面，在开发者工具 Network 中找任意 `api/v0/...` 请求
-3. 复制请求头 `authorization: Bearer ...` 中 Bearer 后面的值
+## 使用
 
-这类会话 Token 会过期，过期后菜单会提示，重新获取并粘贴到设置中即可。
+1. 首次启动会在设置中提示填写 Token（应用无 Token 时面板顶部显示提示）。
+2. 获取 Token：浏览器登录 <https://platform.deepseek.com>，打开用量页面，
+   在开发者工具 Network 中找任意 `api/v0/...` 请求，复制请求头
+   `authorization: Bearer ...` 中 Bearer 后面的值（这是网页会话 Token，不是 `sk-` 开头的 API Key）。
+3. 会话 Token 会过期，过期后菜单提示，重新获取粘贴即可。
+4. 想离线看看界面：设置里打开「使用本地模拟数据」，或 `DEEPSEEK_PANEL_MOCK=1` 启动。
 
 ## 数据接口
 
@@ -48,10 +76,22 @@ make dump       # 无界面自测：拉取并打印余额/用量
 | 按 Key 的 token 用量 | `GET /api/v0/usage/by_api_key/amount?start=&end=&tz=` |
 | 按 Key 的费用 | `GET /api/v0/usage/by_api_key/cost?start=&end=&tz=` |
 
-注意：这两个用量接口要求跨天查询时 `start`/`end` 都必须是当地时区的 00:00，且跨度不超过 31 天，否则返回 `INVALID_PARAM`。应用会自动按天对齐请求窗口，再在本地过滤出实际统计区间。
+注意：这两个用量接口要求跨天查询时 `start`/`end` 都必须是当地时区的 00:00，且跨度不超过 31 天，否则返回 `INVALID_PARAM`。应用会自动按天对齐请求窗口（每批最多 28 天），再在本地过滤出实际统计区间。
 
 ## 目录结构
 
-- `Sources/DeepSeekPanel/`：Swift 源码（API 客户端、模型、聚合、菜单栏 UI、设置窗口）
-- `App/Info.plist`：应用 bundle 配置（`LSUIElement` 隐藏 Dock 图标）
-- `scripts/`：构建与图标生成脚本
+- `main.go` / `app.go`：Wails 应用入口、绑定方法与刷新循环（对应 Swift 的 AppDelegate/StatusBarController）
+- `internal/deepseek/`：平台 API 客户端与模型（对应 DeepSeekClient.swift / Models.swift）
+- `internal/panel/`：统计周期、聚合、趋势存储、设置、Token 存储、模拟数据、热力图、开机自启（对应 Usage.swift / TrendStore.swift / MockData.swift 等）
+- `internal/tray/`：跨平台托盘（macOS 原生 NSStatusItem；Linux AppIndicator，均挂在 Wails 事件循环上）
+- `frontend/dist/`：Web 前端（面板 + 设置，ECharts 图表），随二进制内嵌，无构建步骤
+- `scripts/`：build-mac.sh（macOS 打包）、setup-linux-deps.sh（无 root 装依赖）、gen_icon.go（托盘图标）
+- `App/Info.plist`：macOS bundle 配置（`LSUIElement` 隐藏 Dock 图标）
+
+## 环境变量
+
+| 变量 | 作用 |
+| --- | --- |
+| `DEEPSEEK_PANEL_MOCK=1` | 使用本地模拟数据（离线测试） |
+| `DEEPSEEK_PANEL_TEST_TOKEN` | 临时指定 Token（不落盘） |
+| `DEEPSEEK_PANEL_DEBUG=1` | 打印调试信息 |

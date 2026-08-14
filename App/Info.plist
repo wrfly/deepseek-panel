@@ -5,7 +5,7 @@
     <key>CFBundleDevelopmentRegion</key>
     <string>zh_CN</string>
     <key>CFBundleExecutable</key>
-    <string>DeepSeekPanel</string>
+    <string>deepseek-panel</string>
     <key>CFBundleIdentifier</key>
     <string>com.local.deepseek-panel</string>
     <key>CFBundleInfoDictionaryVersion</key>
@@ -27,7 +27,7 @@
     <key>NSHighResolutionCapable</key>
     <true/>
     <key>CFBundleIconFile</key>
-    <string>AppIcon</string>
+    <string>icon</string>
     <key>NSHumanReadableCopyright</key>
     <string>Copyright © 2026</string>
 </dict>
