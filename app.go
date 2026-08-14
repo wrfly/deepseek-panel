@@ -70,6 +70,7 @@ type SettingsJSON struct {
 	UseMockData            bool    `json:"useMockData"`
 	Budget                 float64 `json:"budget"`
 	HeatmapMetric          string  `json:"heatmapMetric"`
+	TrayDisplay            string  `json:"trayDisplay"`
 	HasToken               bool    `json:"hasToken"`
 	LaunchAtLogin          bool    `json:"launchAtLogin"`
 }
@@ -601,6 +602,7 @@ func (a *App) settingsJSON(settings panel.Settings) SettingsJSON {
 		UseMockData:            settings.UseMockData,
 		Budget:                 settings.Budget,
 		HeatmapMetric:          settings.HeatmapMetric,
+		TrayDisplay:            settings.TrayDisplay,
 		HasToken:               a.token() != "",
 		LaunchAtLogin:          a.autostart.IsEnabled(),
 	}
@@ -636,14 +638,41 @@ func (a *App) trayText(snap *Snapshot, settings panel.Settings) (string, string)
 	hasToday := todayTokens > 0 || todayCost > 0
 
 	title := "🐋"
-	if hasToday {
-		title = "🐋 今日 " + panel.FormatMoney(todayCost, currency) + " · " + panel.FormatTokens(todayTokens)
-	} else if snap.Summary != nil {
-		wallet := pickWallet(snap.Summary, settings.DisplayCurrency)
-		if wallet != nil {
-			title = "🐋 " + panel.FormatMoney(panel.ParseDecimal(wallet.Balance), wallet.Currency)
+	switch panel.TrayDisplay(settings.TrayDisplay) {
+	case panel.TrayCost:
+		if hasToday {
+			title = "🐋 今日 " + panel.FormatMoney(todayCost, currency)
+		} else if snap.Summary != nil {
+			if wallet := pickWallet(snap.Summary, settings.DisplayCurrency); wallet != nil {
+				title = "🐋 " + panel.FormatMoney(panel.ParseDecimal(wallet.Balance), wallet.Currency)
+			}
 		}
-	} else if snap.ErrorMessage != "" {
+	case panel.TrayTokens:
+		if hasToday {
+			title = "🐋 今日 " + panel.FormatTokens(todayTokens)
+		} else if snap.Summary != nil {
+			if wallet := pickWallet(snap.Summary, settings.DisplayCurrency); wallet != nil {
+				title = "🐋 " + panel.FormatMoney(panel.ParseDecimal(wallet.Balance), wallet.Currency)
+			}
+		}
+	case panel.TrayBalance:
+		if snap.Summary != nil {
+			if wallet := pickWallet(snap.Summary, settings.DisplayCurrency); wallet != nil {
+				title = "🐋 " + panel.FormatMoney(panel.ParseDecimal(wallet.Balance), wallet.Currency)
+			}
+		}
+	case panel.TrayNone:
+		title = "🐋"
+	default: // TrayBoth
+		if hasToday {
+			title = "🐋 今日 " + panel.FormatMoney(todayCost, currency) + " · " + panel.FormatTokens(todayTokens)
+		} else if snap.Summary != nil {
+			if wallet := pickWallet(snap.Summary, settings.DisplayCurrency); wallet != nil {
+				title = "🐋 " + panel.FormatMoney(panel.ParseDecimal(wallet.Balance), wallet.Currency)
+			}
+		}
+	}
+	if snap.ErrorMessage != "" && snap.Summary == nil {
 		title = "⚠️"
 	}
 
@@ -725,6 +754,7 @@ func (a *App) SaveSettings(s SettingsJSON) (SettingsJSON, error) {
 		UseMockData:            s.UseMockData,
 		Budget:                 s.Budget,
 		HeatmapMetric:          s.HeatmapMetric,
+		TrayDisplay:            s.TrayDisplay,
 	}
 	settings.Normalize()
 	a.settings.Save(settings)

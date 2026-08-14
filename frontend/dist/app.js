@@ -394,6 +394,7 @@ function syncSettingsForm(snap) {
   $("set-currency").value = s.displayCurrency;
   $("set-budget").value = s.budget > 0 ? s.budget : "";
   $("set-heatmap").value = s.heatmapMetric;
+  $("set-tray").value = s.trayDisplay || "todayBoth";
   $("set-mock").checked = s.useMockData;
   $("set-autostart").checked = s.launchAtLogin;
   if (!$("set-token").dataset.loaded) {
@@ -420,6 +421,7 @@ async function saveSettings() {
       useMockData: $("set-mock").checked,
       budget: isNaN(budget) ? 0 : budget,
       heatmapMetric: $("set-heatmap").value,
+      trayDisplay: $("set-tray").value,
       launchAtLogin: $("set-autostart").checked,
     };
     const token = $("set-token").value;
@@ -569,7 +571,7 @@ function mockSnapshot() {
     budgetRatio: 0.51,
     settings: {
       refreshIntervalMinutes: 5, period: "today", displayCurrency: "CNY",
-      useMockData: true, budget: 100, heatmapMetric: "tokens",
+      useMockData: true, budget: 100, heatmapMetric: "tokens", trayDisplay: "todayBoth",
       hasToken: true, launchAtLogin: false,
     },
     trayTitle: "\ud83d\udc0b \u00a53.14", trayTooltip: "DeepSeek 用量面板",

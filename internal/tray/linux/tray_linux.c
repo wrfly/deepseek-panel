@@ -45,6 +45,9 @@ static gboolean do_start(gpointer data) {
     }
     const char *label = (sd->title && strlen(sd->title) > 0) ? sd->title : sd->tooltip;
     if (label && strlen(label) > 0) {
+        // XAyatanaLabel：GNOME AppIndicators 扩展会把它显示在图标旁边；
+        // Title 供其他面板（KDE 等）使用。
+        app_indicator_set_label(g_indicator, label, "");
         app_indicator_set_title(g_indicator, label);
     }
     app_indicator_set_status(g_indicator, APP_INDICATOR_STATUS_ACTIVE);
@@ -76,6 +79,7 @@ static gboolean do_set_text(gpointer data) {
         // 优先显示单行标题（如“🐋 今日 ¥58.74 · 15.03M”），标题为空时回退到提示。
         const char *label = (td->title && strlen(td->title) > 0) ? td->title : td->tooltip;
         if (label && strlen(label) > 0) {
+            app_indicator_set_label(g_indicator, label, "");
             app_indicator_set_title(g_indicator, label);
         }
     }

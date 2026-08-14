@@ -7,6 +7,22 @@ import (
 	"sync"
 )
 
+// TrayDisplay 菜单栏/托盘文字显示内容。
+type TrayDisplay string
+
+const (
+	// TrayBoth 今日花费 + Token（默认）
+	TrayBoth TrayDisplay = "todayBoth"
+	// TrayCost 仅今日花费
+	TrayCost TrayDisplay = "todayCost"
+	// TrayTokens 仅今日 Token
+	TrayTokens TrayDisplay = "todayTokens"
+	// TrayBalance 余额（原版行为）
+	TrayBalance TrayDisplay = "balance"
+	// TrayNone 仅图标
+	TrayNone TrayDisplay = "none"
+)
+
 // Settings 应用设置，对应 Swift AppSettings（UserDefaults）。
 type Settings struct {
 	RefreshIntervalMinutes int     `json:"refreshIntervalMinutes"`
@@ -14,7 +30,8 @@ type Settings struct {
 	DisplayCurrency        string  `json:"displayCurrency"`
 	UseMockData            bool    `json:"useMockData"`
 	Budget                 float64 `json:"budget"`
-	HeatmapMetric          string  `json:"heatmapMetric"` // "tokens" | "cost"
+	HeatmapMetric          string  `json:"heatmapMetric"`      // "tokens" | "cost"
+	TrayDisplay            string  `json:"trayDisplay"`        // TrayDisplay 常量
 }
 
 // WithDefaults 返回带默认值的设置。
@@ -26,6 +43,7 @@ func WithDefaults() Settings {
 		UseMockData:            false,
 		Budget:                 0,
 		HeatmapMetric:          "tokens",
+		TrayDisplay:            string(TrayBoth),
 	}
 }
 
@@ -46,6 +64,11 @@ func (s *Settings) Normalize() {
 	}
 	if s.HeatmapMetric != "cost" {
 		s.HeatmapMetric = "tokens"
+	}
+	switch TrayDisplay(s.TrayDisplay) {
+	case TrayBoth, TrayCost, TrayTokens, TrayBalance, TrayNone:
+	default:
+		s.TrayDisplay = string(TrayBoth)
 	}
 }
 

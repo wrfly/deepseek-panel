@@ -159,6 +159,17 @@
           <option value="cost">消耗（费用）</option>
         </select>
       </div>
+      <div class="field">
+        <label for="set-tray">菜单栏显示</label>
+        <select id="set-tray">
+          <option value="todayBoth">今日花费 + Token</option>
+          <option value="todayCost">今日花费</option>
+          <option value="todayTokens">今日 Token</option>
+          <option value="balance">余额</option>
+          <option value="none">仅图标</option>
+        </select>
+        <p class="hint">在系统托盘/菜单栏图标旁显示的文字（macOS 菜单栏与 Linux 托盘均可）。</p>
+      </div>
       <div class="field checkbox-field">
         <label class="checkbox"><input type="checkbox" id="set-mock"> 使用本地模拟数据（离线测试，不联网）</label>
       </div>
