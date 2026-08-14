@@ -36,7 +36,8 @@ enum Dump {
                 keys: keys,
                 amount: amount,
                 cost: cost,
-                window: window
+                window: window,
+                currency: AppSettings.displayCurrency
             )
 
             print("=== 余额 ===")

@@ -1,7 +1,10 @@
 import Foundation
 
 /// 趋势数据的本地持久化：按小时合并累积，重启后不丢失。
+/// 同时维护一份内存缓存，避免一次刷新内反复读写磁盘。
 enum TrendStore {
+    private static var cache: [Int: TrendPoint]?
+
     private static var fileURL: URL {
         let base = FileManager.default.urls(
             for: .applicationSupportDirectory,
@@ -16,6 +19,13 @@ enum TrendStore {
     }
 
     static func load() -> [Int: TrendPoint] {
+        if let cache { return cache }
+        let loaded = loadFromDisk()
+        cache = loaded
+        return loaded
+    }
+
+    private static func loadFromDisk() -> [Int: TrendPoint] {
         guard let data = try? Data(contentsOf: fileURL),
               let points = try? JSONDecoder().decode([TrendPoint].self, from: data) else {
             return [:]
@@ -25,22 +35,9 @@ enum TrendStore {
 
     static func save(_ points: [TrendPoint]) {
         let sorted = points.sorted { $0.time < $1.time }
+        cache = Dictionary(uniqueKeysWithValues: sorted.map { ($0.time, $0) })
         guard let data = try? JSONEncoder().encode(sorted) else { return }
         try? data.write(to: fileURL, options: .atomic)
-    }
-
-    /// 用最新拉取的数据覆盖合并，并按小时去重；只保留最近 400 天。
-    static func merge(_ existing: [Int: TrendPoint], _ fetched: [TrendPoint]) -> [TrendPoint] {
-        var merged = existing
-        for point in fetched {
-            merged[point.time] = point
-        }
-        var sorted = merged.values.sorted { $0.time < $1.time }
-        let maxPoints = 24 * 400
-        if sorted.count > maxPoints {
-            sorted = Array(sorted.suffix(maxPoints))
-        }
-        return sorted
     }
 
     /// 某一天内已缓存的小时数。
@@ -52,7 +49,12 @@ enum TrendStore {
 
     /// 用新数据整体替换某一天的小时数据（幂等，重复拉取不会叠加）。
     static func replaceDay(_ points: [TrendPoint], dayStart: Int, dayEnd: Int) {
-        var all = load().values.filter { $0.time < dayStart || $0.time >= dayEnd }
+        replaceRange(points, start: dayStart, end: dayEnd)
+    }
+
+    /// 用新数据整体替换 [start, end) 范围内的小时数据（可跨多天，幂等）。
+    static func replaceRange(_ points: [TrendPoint], start: Int, end: Int) {
+        var all = load().values.filter { $0.time < start || $0.time >= end }
         all.append(contentsOf: points)
         save(all)
     }

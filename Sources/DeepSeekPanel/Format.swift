@@ -6,7 +6,9 @@ func parseDecimal(_ string: String) -> Double {
 
 func formatMoney(_ value: Double, currency: String) -> String {
     let symbol = currency == "USD" ? "$" : "¥"
-    return symbol + String(format: "%.2f", value)
+    // 极小费用（< 0.01）用 4 位小数，避免被抹成 0.00；常规金额保持 2 位。
+    let decimals = (value != 0 && abs(value) < 0.01) ? 4 : 2
+    return symbol + String(format: "%.\(decimals)f", value)
 }
 
 func formatTokens(_ count: Int) -> String {

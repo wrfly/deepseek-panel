@@ -102,10 +102,12 @@ final class StatusBarController: NSObject {
                 keys: keys,
                 amount: amount,
                 cost: cost,
-                window: window
+                window: window,
+                currency: AppSettings.displayCurrency
             )
             snapshot.errorMessage = nil
             snapshot.lastUpdated = now
+            populateMockHeatmap(tz: tz)
             refreshPanel()
             return
         }
@@ -126,9 +128,8 @@ final class StatusBarController: NSObject {
         }
 
         let client = DeepSeekClient(token: token)
-        if period != .today {
-            await ensureHourlyHistory(client: client, now: now, tz: tz)
-        }
+        // 无论周期，都保证最近 7 天按小时数据完整，供趋势图与热力图使用（幂等）。
+        await ensureHourlyHistory(client: client, now: now, tz: tz)
         do {
             async let summaryResult = client.fetchSummary()
             async let keysResult = client.fetchKeys()
@@ -153,7 +154,8 @@ final class StatusBarController: NSObject {
                 keys: keys,
                 amount: amount,
                 cost: cost,
-                window: window
+                window: window,
+                currency: AppSettings.displayCurrency
             )
             let fetchedTrend = report.trend
 
@@ -180,26 +182,37 @@ final class StatusBarController: NSObject {
         refreshPanel()
     }
 
-    /// 保证最近 7 天 + 今天都有按小时的数据；已缓存的日期不再远程拉取。
+    /// 主动回填最近 24 周（对应热力图范围）的按小时数据；已缓存的日期不再远程拉取。
+    /// 用量接口要求跨天查询跨度 ≤31 天，这里按每批 28 天分批拉取。
     private func ensureHourlyHistory(client: DeepSeekClient, now: Date, tz: Int) async {
         let calendar = Calendar.current
         let todayStart = calendar.startOfDay(for: now)
+        let totalDays = 24 * 7  // 168 天，与热力图 24 周一致
 
-        for offset in 0..<7 {
-            guard let day = calendar.date(byAdding: .day, value: -offset, to: todayStart) else {
-                continue
+        // 历史（不含今天）：从最远的 167 天前往今天方向回填。
+        var earliestOffset = totalDays - 1  // 167
+        while earliestOffset > 0 {
+            let batchDays = min(28, earliestOffset)
+            let endOffset = earliestOffset
+            let startOffset = earliestOffset - batchDays + 1
+            guard let endDay = calendar.date(byAdding: .day, value: -endOffset, to: todayStart),
+                  let startDay = calendar.date(byAdding: .day, value: -startOffset, to: todayStart) else {
+                break
             }
-            let start = Int(day.timeIntervalSince1970)
-            let end = start + 86400
-            if TrendStore.coverageCount(from: start, to: end) >= 24 { continue }
-            await mergeHourlyDay(client: client, start: start, end: end, tz: tz)
+            let start = Int(startDay.timeIntervalSince1970)
+            let end = Int(endDay.timeIntervalSince1970) + 86400
+            if TrendStore.coverageCount(from: start, to: end) < batchDays * 24 {
+                await fetchAndMergeRange(client: client, start: start, end: end, tz: tz)
+            }
+            earliestOffset -= batchDays
         }
 
-        let todayStartInt = Int(todayStart.timeIntervalSince1970)
-        if TrendStore.coverageCount(from: todayStartInt, to: todayStartInt + 86400) < 24,
-           shouldFetchTodayHourly(now: now) {
+        // 今天：数据仍在增长，按 15 分钟节流持续补齐，而不是依赖覆盖判定
+        // （今天尚未结束，覆盖永远到不了 24 小时，否则整天数据会被一次性冻结）。
+        if shouldFetchTodayHourly(now: now) {
             lastHourlyFetch = now
-            await mergeHourlyDay(
+            let todayStartInt = Int(todayStart.timeIntervalSince1970)
+            await fetchAndMergeRange(
                 client: client,
                 start: todayStartInt,
                 end: todayStartInt + 86400,
@@ -214,45 +227,43 @@ final class StatusBarController: NSObject {
         return now.timeIntervalSince(last) >= 15 * 60
     }
 
-    private func mergeHourlyDay(client: DeepSeekClient, start: Int, end: Int, tz: Int) async {
+    private func fetchAndMergeRange(client: DeepSeekClient, start: Int, end: Int, tz: Int) async {
         guard let amount = try? await client.fetchAmount(start: start, end: end, tz: tz),
               let cost = try? await client.fetchCost(start: start, end: end, tz: tz) else {
             return
         }
+        Self.mergeRange(amount: amount, cost: cost, start: start, end: end)
+    }
 
-        var points: [TrendPoint] = []
+    /// 把 [start, end) 范围内的 amount + cost 合并成按小时的点，整体替换进 TrendStore（可跨多天）。
+    private static func mergeRange(amount: UsageAmountData, cost: CostData, start: Int, end: Int) {
+        var byTime: [Int: TrendPoint] = [:]
         for series in amount.series {
             for bucket in series.buckets {
-                var point = points.first { $0.time == bucket.time }
-                    ?? TrendPoint(time: bucket.time, tokens: 0, costCNY: 0, costUSD: 0)
+                var point = byTime[bucket.time] ?? TrendPoint(time: bucket.time)
                 point.tokens += (bucket.usage.responseToken ?? 0)
                     + (bucket.usage.promptCacheHitToken ?? 0)
                     + (bucket.usage.promptCacheMissToken ?? 0)
-                if let index = points.firstIndex(where: { $0.time == bucket.time }) {
-                    points[index] = point
-                } else {
-                    points.append(point)
-                }
+                byTime[bucket.time] = point
             }
         }
         for currency in cost.data ?? [] {
             let isUSD = currency.currency == "USD"
             for series in currency.series {
                 for bucket in series.buckets {
+                    var point = byTime[bucket.time] ?? TrendPoint(time: bucket.time)
                     let value = Double(bucket.cost) ?? 0
-                    if let index = points.firstIndex(where: { $0.time == bucket.time }) {
-                        if isUSD {
-                            points[index].costUSD += value
-                        } else {
-                            points[index].costCNY += value
-                        }
+                    if isUSD {
+                        point.costUSD += value
+                    } else {
+                        point.costCNY += value
                     }
+                    byTime[bucket.time] = point
                 }
             }
         }
-        // 补齐一天内缺失的小时（无使用量的整天接口会返回空 series），
+        // 补齐范围内缺失的小时（无使用量的整天接口会返回空 series），
         // 保证覆盖判定稳定，避免每次都重拉。
-        var byTime = Dictionary(uniqueKeysWithValues: points.map { ($0.time, $0) })
         var time = start
         while time < end {
             if byTime[time] == nil {
@@ -260,20 +271,40 @@ final class StatusBarController: NSObject {
             }
             time += 3600
         }
-        TrendStore.replaceDay(Array(byTime.values), dayStart: start, dayEnd: end)
+        TrendStore.replaceRange(Array(byTime.values), start: start, end: end)
+    }
+
+    /// mock 模式也填充最近 24 周（与热力图范围一致）的缓存，便于离线测试 UI。
+    private func populateMockHeatmap(tz: Int) {
+        let calendar = Calendar.current
+        let todayStart = calendar.startOfDay(for: Date())
+        for offset in 0..<(24 * 7) {
+            guard let day = calendar.date(byAdding: .day, value: -offset, to: todayStart) else {
+                continue
+            }
+            let start = Int(day.timeIntervalSince1970)
+            let end = start + 86400
+            // 已缓存的天不再重复生成（幂等）。
+            if TrendStore.coverageCount(from: start, to: end) >= 24 { continue }
+            let mockWindow = StatsWindow(
+                filterStart: start,
+                filterEnd: end,
+                requestStart: start,
+                requestEnd: end
+            )
+            let (_, _, amount, cost) = MockData.fetch(window: mockWindow, tz: tz)
+            Self.mergeRange(amount: amount, cost: cost, start: start, end: end)
+        }
     }
 
     /// 图表数据 = 本地小时缓存 + 未缓存日期的远程日粒度点。
     private static func combinedTrend(window: StatsWindow, fetched: [TrendPoint]) -> [TrendPoint] {
         let cached = TrendStore.load().values.filter { window.contains(time: $0.time) }
         var merged = Dictionary(uniqueKeysWithValues: cached.map { ($0.time, $0) })
-        for point in fetched {
-            let dayStart = (point.time / 86400) * 86400
-            let dayEnd = dayStart + 86400
-            let covered = cached.contains { $0.time >= dayStart && $0.time < dayEnd }
-            if !covered {
-                merged[point.time] = point
-            }
+        // 已缓存完整天的小时数据优先；用 Set 判断某天是否已覆盖，避免 O(n·m) 扫描。
+        let coveredDays = Set(cached.map { ($0.time / 86400) * 86400 })
+        for point in fetched where !coveredDays.contains((point.time / 86400) * 86400) {
+            merged[point.time] = point
         }
         return merged.values.sorted { $0.time < $1.time }
     }
@@ -311,14 +342,6 @@ final class StatusBarController: NSObject {
 
         menu.addItem(.separator())
 
-        let refreshItem = NSMenuItem(
-            title: "刷新",
-            action: #selector(refreshTapped),
-            keyEquivalent: "r"
-        )
-        refreshItem.target = self
-        menu.addItem(refreshItem)
-
         let openItem = NSMenuItem(
             title: "打开平台用量页",
             action: #selector(openUsagePage),
@@ -326,14 +349,6 @@ final class StatusBarController: NSObject {
         )
         openItem.target = self
         menu.addItem(openItem)
-
-        let settingsItem = NSMenuItem(
-            title: "设置…",
-            action: #selector(openSettings),
-            keyEquivalent: ","
-        )
-        settingsItem.target = self
-        menu.addItem(settingsItem)
 
         menu.addItem(.separator())
 
@@ -347,27 +362,52 @@ final class StatusBarController: NSObject {
     private func updateButtonTitle() {
         guard let button = statusItem.button else { return }
         button.image = nil
-        if let summary = snapshot.summary,
-           let wallet = summary.normalWallets.first(where: {
-               $0.currency == AppSettings.displayCurrency
-           }) {
-            button.title = "🐋 " + formatMoney(
-                parseDecimal(wallet.balance),
-                currency: wallet.currency
-            )
-        } else if snapshot.errorMessage != nil, snapshot.summary == nil {
+        if let summary = snapshot.summary {
+            // 与面板头卡一致：所选币种没有钱包时回退到第一个可用钱包。
+            let wallet = summary.normalWallets.first(where: {
+                $0.currency == AppSettings.displayCurrency
+            }) ?? summary.normalWallets.first
+            if let wallet {
+                button.title = "🐋 " + formatMoney(
+                    parseDecimal(wallet.balance),
+                    currency: wallet.currency
+                )
+            } else {
+                button.title = "🐋"
+            }
+        } else if snapshot.errorMessage != nil {
             button.title = "⚠️"
         } else {
             button.title = "🐋"
         }
+        button.toolTip = Self.tooltipText(snapshot: snapshot)
         if ProcessInfo.processInfo.environment["DEEPSEEK_PANEL_DEBUG"] == "1" {
             print("DEBUG status title: \(button.title)")
         }
     }
 
-    @objc private func refreshTapped() {
-        refreshNow()
+    /// 悬停提示：显示数据新鲜度或错误信息，弥补状态栏空间有限的不足。
+    private static func tooltipText(snapshot: Snapshot) -> String {
+        if let error = snapshot.errorMessage, snapshot.summary == nil {
+            return error
+        }
+        var parts = ["DeepSeek 用量面板"]
+        if let lastUpdated = snapshot.lastUpdated {
+            parts.append("最后更新 \(timeFormatter.string(from: lastUpdated))")
+        } else if snapshot.errorMessage == nil {
+            parts.append("加载中…")
+        }
+        if let error = snapshot.errorMessage, snapshot.summary != nil {
+            parts.append(error)
+        }
+        return parts.joined(separator: " · ")
     }
+
+    private static let timeFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "HH:mm"
+        return formatter
+    }()
 
     @objc private func periodChanged(_ note: Notification) {
         guard let raw = note.object as? String,
@@ -378,10 +418,6 @@ final class StatusBarController: NSObject {
 
     @objc private func openUsagePage() {
         NSWorkspace.shared.open(URL(string: "https://platform.deepseek.com/usage")!)
-    }
-
-    @objc private func openSettings() {
-        NotificationCenter.default.post(name: .openSettings, object: nil)
     }
 
     @objc private func quit() {

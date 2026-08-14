@@ -1,5 +1,20 @@
 import Foundation
 
+/// 热力图统计指标：按 Token 用量或按消耗（费用）。
+enum HeatmapMetric: String, CaseIterable, Identifiable {
+    case tokens
+    case cost
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .tokens: return "Token 用量"
+        case .cost: return "消耗（费用）"
+        }
+    }
+}
+
 enum AppSettings {
     private static let defaults = UserDefaults.standard
 
@@ -27,6 +42,18 @@ enum AppSettings {
     static var useMockData: Bool {
         get { defaults.bool(forKey: "useMockData") }
         set { defaults.set(newValue, forKey: "useMockData") }
+    }
+
+    /// 周期预算上限（跟随显示币种）；<= 0 表示未设置。
+    static var budget: Double {
+        get { max(0, defaults.double(forKey: "budget")) }
+        set { defaults.set(max(0, newValue), forKey: "budget") }
+    }
+
+    /// 热力图统计指标。
+    static var heatmapMetric: HeatmapMetric {
+        get { HeatmapMetric(rawValue: defaults.string(forKey: "heatmapMetric") ?? "") ?? .tokens }
+        set { defaults.set(newValue.rawValue, forKey: "heatmapMetric") }
     }
 
 }

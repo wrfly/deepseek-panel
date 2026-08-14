@@ -136,7 +136,8 @@ enum UsageAggregator {
         keys: [APIKeyInfo],
         amount: UsageAmountData,
         cost: CostData,
-        window: StatsWindow
+        window: StatsWindow,
+        currency: String
     ) -> UsageReport {
         var byName: [String: KeyUsage] = [:]
         var modelByName: [String: ModelUsage] = [:]
@@ -207,8 +208,10 @@ enum UsageAggregator {
                 key.requests > 0 || key.totalTokens > 0 || key.costCNY > 0 || key.costUSD > 0
             }
             .sorted { left, right in
-                if left.costCNY != right.costCNY {
-                    return left.costCNY > right.costCNY
+                let leftCost = left.cost(in: currency)
+                let rightCost = right.cost(in: currency)
+                if leftCost != rightCost {
+                    return leftCost > rightCost
                 }
                 return left.name.localizedStandardCompare(right.name) == .orderedAscending
             }

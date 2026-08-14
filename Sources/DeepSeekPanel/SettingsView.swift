@@ -7,6 +7,8 @@ struct SettingsView: View {
     @State private var periodRaw = AppSettings.period.rawValue
     @State private var currency = AppSettings.displayCurrency
     @State private var useMock = AppSettings.useMockData
+    @State private var budgetValue: Double? = AppSettings.budget > 0 ? AppSettings.budget : nil
+    @State private var heatmapMetricRaw = AppSettings.heatmapMetric.rawValue
     @State private var launchAtLogin = SMAppService.mainApp.status == .enabled
     @State private var saveMessage: String?
     @State private var loginErrorMessage: String?
@@ -40,6 +42,16 @@ struct SettingsView: View {
                     Text("CNY（¥）").tag("CNY")
                     Text("USD（$）").tag("USD")
                 }
+                TextField("周期预算（跟随显示币种）", value: $budgetValue, format: .number)
+                    .textFieldStyle(.roundedBorder)
+                Text("设置后，面板会按「当前周期消耗 / 周期预算」显示使用进度；留空表示不设上限。")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                Picker("热力图指标", selection: $heatmapMetricRaw) {
+                    ForEach(HeatmapMetric.allCases) { metric in
+                        Text(metric.title).tag(metric.rawValue)
+                    }
+                }
             }
 
             Section("通用") {
@@ -69,7 +81,7 @@ struct SettingsView: View {
             }
         }
         .formStyle(.grouped)
-        .frame(width: 460, height: 420)
+        .frame(width: 460, height: 540)
     }
 
     private func save() {
@@ -84,6 +96,8 @@ struct SettingsView: View {
         AppSettings.period = StatsPeriod(rawValue: periodRaw) ?? .today
         AppSettings.displayCurrency = currency
         AppSettings.useMockData = useMock
+        AppSettings.budget = budgetValue ?? 0
+        AppSettings.heatmapMetric = HeatmapMetric(rawValue: heatmapMetricRaw) ?? .tokens
         saveMessage = "已保存"
         NotificationCenter.default.post(name: .refreshRequested, object: nil)
     }
