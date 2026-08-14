@@ -48,10 +48,26 @@ const el = (tag, cls, text) => {
 };
 
 /* ---------------- 渲染 ---------------- */
+function reportError(e) {
+  try {
+    if (window.go && window.go.main && window.go.main.App) {
+      window.go.main.App.ReportError(String(e && e.stack ? e.stack : e));
+    }
+  } catch (_) {}
+}
+
 function render(snap) {
   state.snapshot = snap;
   if (!snap) return;
   if (snap.settings && snap.settings.heatmapMetric) state.heatmapMetric = snap.settings.heatmapMetric;
+  try {
+    renderAll(snap);
+  } catch (e) {
+    reportError(e);
+  }
+}
+
+function renderAll(snap) {
 
   // 设置页状态同步
   syncSettingsForm(snap);
@@ -316,6 +332,13 @@ function renderHeatmap(snap) {
 
   const grid = $("heatmap-grid");
   grid.innerHTML = "";
+  // 计算格子尺寸铺满可用宽度（不用 aspect-ratio，WebKitGTK 下会高度塌陷）。
+  // 可用宽 = 容器宽 - 星期标签宽 - wrap 间距(4px)；grid 内部 23 个 2px 间隙。
+  const wrap = grid.parentElement;
+  const labelsEl = $("heatmap-labels");
+  const avail = (wrap ? wrap.clientWidth : 300) - (labelsEl ? labelsEl.offsetWidth : 14) - 4;
+  const cellSize = Math.max(8, Math.floor((avail - 23 * 2) / 24));
+  grid.style.setProperty("--cell", cellSize + "px");
   let maxValue = 0;
   cells.forEach((row) => row.forEach((c) => {
     const v = useCost ? c.cost : c.tokens;
@@ -353,7 +376,6 @@ function renderHeatmap(snap) {
     }
     grid.appendChild(col);
   }
-
   // 起始日期
   if (snap.heatmapStart) {
     const d = new Date(snap.heatmapStart * 1000);
@@ -610,6 +632,7 @@ window.__selftest = function () {
     heatmapGridWidth: grid ? grid.offsetWidth : 0,
     heatmapColHeight: col ? col.offsetHeight : 0,
     heatmapIsHorizontal: !!(grid && col && grid.offsetWidth > col.offsetHeight && cols.length === 24),
+    bodyHeight: document.body ? document.body.scrollHeight : 0,
     trendCanvas: !!state.trendChart,
     pieCanvas: !!state.pieChart,
     heroTokens: $("hero-tokens") ? $("hero-tokens").textContent : "",

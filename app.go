@@ -774,6 +774,11 @@ func (a *App) SaveToken(token string) error {
 	return a.tokens.Save(token)
 }
 
+// ReportError 前端 JS 错误上报（调试用）。
+func (a *App) ReportError(msg string) {
+	fmt.Fprintln(os.Stderr, "JS-ERROR:", msg)
+}
+
 // OpenUsagePage 在浏览器中打开平台用量页。
 func (a *App) OpenUsagePage() {
 	url := "https://platform.deepseek.com/usage"

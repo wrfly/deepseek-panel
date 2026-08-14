@@ -58,11 +58,11 @@ body {
 .hero-col { flex: 1; min-width: 0; }
 .caption { font-size: 9px; font-weight: 600; color: var(--fg-dim); letter-spacing: 0.4px; margin-bottom: 2px; }
 .hero-value {
-  font-size: 24px; font-weight: 600; font-variant-numeric: tabular-nums;
+  font-size: 22px; font-weight: 600; font-variant-numeric: tabular-nums;
   letter-spacing: -0.5px; line-height: 1.1; white-space: nowrap;
 }
 .hero-cost {
-  font-size: 19px; font-weight: 600; font-variant-numeric: tabular-nums;
+  font-size: 17px; font-weight: 600; font-variant-numeric: tabular-nums;
   line-height: 1.15; white-space: nowrap; display: flex; align-items: center; gap: 6px;
 }
 .hero-cost .whale-sm { font-size: 15px; }
@@ -76,14 +76,14 @@ body {
 .budget-label { font-size: 9px; font-weight: 600; color: var(--fg-dim); width: 36px; text-align: right; font-variant-numeric: tabular-nums; }
 .budget-label.over { color: var(--danger); }
 
-.hairline { height: 1px; background: var(--hairline); margin: 7px 0; }
+.hairline { height: 1px; background: var(--hairline); margin: 6px 0; }
 
 /* 区块标题 */
 .section-title { font-size: 10px; font-weight: 600; margin: 4px 0 3px; }
 
 /* 模型行 */
 .model-rows { display: flex; flex-direction: column; gap: 1px; margin-bottom: 6px; }
-.model-row { display: flex; align-items: center; gap: 6px; height: 15px; font-size: 11px; }
+.model-row { display: flex; align-items: center; gap: 6px; height: 14px; font-size: 11px; }
 .model-row .dot { width: 6px; height: 6px; border-radius: 50%; flex: none; }
 .model-row .name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 500; }
 .model-row .stat { color: var(--fg-dim); font-size: 10px; font-variant-numeric: tabular-nums; white-space: nowrap; }
@@ -102,7 +102,7 @@ body {
   background: var(--pill-bg); color: var(--fg-dim); cursor: pointer; font-family: inherit;
 }
 .pill.selected { background: var(--accent); color: #fff; }
-.trend-chart { height: 54px; margin-top: 0; }
+.trend-chart { height: 50px; margin-top: 0; }
 .axis-row { display: flex; justify-content: space-between; margin-top: 4px; }
 .axis-label { font-size: 9px; color: var(--fg-faint); }
 
@@ -111,7 +111,7 @@ body {
 .keys-header .meta { font-size: 9px; color: var(--fg-faint); }
 .keys-area { display: flex; gap: 8px; min-height: 72px; margin: 2px 0 4px; }
 .key-rows { flex: 1; display: flex; flex-direction: column; justify-content: center; gap: 0; min-width: 0; }
-.key-row { display: flex; align-items: center; gap: 6px; height: 34px; min-width: 0; }
+.key-row { display: flex; align-items: center; gap: 6px; height: 32px; min-width: 0; }
 .key-row .dot { width: 8px; height: 8px; border-radius: 50%; flex: none; }
 .key-main { flex: 1; min-width: 0; }
 .key-line1 { display: flex; align-items: center; gap: 6px; min-width: 0; }
@@ -131,12 +131,12 @@ body {
 /* 热力图 */
 .heatmap-header { display: flex; justify-content: space-between; align-items: center; }
 .heatmap-header .meta { font-size: 9px; color: var(--fg-faint); }
-.heatmap-wrap { display: flex; gap: 3px; margin-top: 4px; }
+.heatmap-wrap { display: flex; gap: 4px; margin-top: 4px; }
 .heatmap-labels { display: flex; flex-direction: column; width: 14px; font-size: 8px; color: var(--fg-faint); }
 .heatmap-labels span { height: 11px; line-height: 11px; text-align: right; padding-right: 2px; }
-.heatmap-grid { display: flex; gap: 1.5px; }
-.heatmap-col { display: flex; flex-direction: column; gap: 1.5px; }
-.heatmap-cell { width: 9px; height: 9px; border-radius: 2px; background: var(--pill-bg); }
+.heatmap-grid { display: flex; gap: 2px; justify-content: space-between; flex: 1; min-width: 0; }
+.heatmap-col { display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0; }
+.heatmap-cell { width: var(--cell, 12px); height: var(--cell, 12px); border-radius: 2px; background: var(--pill-bg); }
 .heatmap-cell.hover { outline: 1.5px solid var(--fg); outline-offset: 0; }
 
 /* 设置页 */

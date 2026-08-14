@@ -14,8 +14,8 @@ const (
 	PeriodThisMonth StatsPeriod = "thisMonth"
 )
 
-// AllPeriods 按展示顺序排列的全部周期。
-var AllPeriods = []StatsPeriod{PeriodToday, PeriodLast24h, PeriodLast7d, PeriodThisMonth}
+// AllPeriods 按展示顺序排列的全部周期（UI 提供今天/7天/本月，last24h 仅向后兼容旧设置）。
+var AllPeriods = []StatsPeriod{PeriodToday, PeriodLast7d, PeriodThisMonth}
 
 // Title 周期的中文标题。
 func (p StatsPeriod) Title() string {
