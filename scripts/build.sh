@@ -2,7 +2,7 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-swift build -c release
+swift build -c release --disable-sandbox
 
 APP_DIR=dist/DeepSeekPanel.app
 rm -rf "$APP_DIR"
