@@ -19,7 +19,7 @@
 
 ## 功能
 
-- 托盘/菜单栏：🐋 logo + 当前余额（默认 CNY，可在设置切换 USD）
+- 托盘/菜单栏：🐋 logo + 当日消耗（Token/费用，如 `🐋 今日 ¥58.74 · 15.03M`）；悬停提示含余额、已消费与更新时间
 - 用量面板窗口：
   - 余额头卡：TOTAL TOKENS / EST. COST、缓存命中量与命中率
   - TOKENS BY MODEL / COST BY MODEL（带占比）

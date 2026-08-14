@@ -73,11 +73,10 @@ typedef struct {
 static gboolean do_set_text(gpointer data) {
     TextData *td = (TextData *)data;
     if (g_indicator != NULL) {
-        if (td->title && strlen(td->title) > 0) {
-            app_indicator_set_title(g_indicator, td->title);
-        }
-        if (td->tooltip && strlen(td->tooltip) > 0) {
-            app_indicator_set_title(g_indicator, td->tooltip);
+        // 优先显示单行标题（如“🐋 今日 ¥58.74 · 15.03M”），标题为空时回退到提示。
+        const char *label = (td->title && strlen(td->title) > 0) ? td->title : td->tooltip;
+        if (label && strlen(label) > 0) {
+            app_indicator_set_title(g_indicator, label);
         }
     }
     g_free(td->title);

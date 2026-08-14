@@ -7,6 +7,7 @@ import (
 	"os/exec"
 	"runtime"
 	"sort"
+	"strings"
 	"sync"
 	"time"
 
@@ -578,10 +579,37 @@ func (a *App) settingsJSON(settings panel.Settings) SettingsJSON {
 
 // ---- 托盘文案 ----
 
-// trayText 生成托盘标题与提示，与 Swift updateButtonTitle/tooltipText 一致。
+// todayTotals 汇总今天（本地 0 点起）的趋势点：Token 与费用（按显示币种）。
+func todayTotals(snap *Snapshot, currency string) (int64, float64) {
+	now := time.Now()
+	y, m, d := now.Date()
+	todayStart := time.Date(y, m, d, 0, 0, 0, 0, now.Location()).Unix()
+	var tokens int64
+	var cost float64
+	for _, p := range snap.Report.Trend {
+		if p.Time >= todayStart {
+			tokens += p.Tokens
+			if currency == "USD" {
+				cost += p.CostUSD
+			} else {
+				cost += p.CostCNY
+			}
+		}
+	}
+	return tokens, cost
+}
+
+// trayText 生成托盘标题与提示：
+// 标题显示「今日消耗 Token/费用」；无当日数据时回退到余额。
 func (a *App) trayText(snap *Snapshot, settings panel.Settings) (string, string) {
+	currency := settings.DisplayCurrency
+	todayTokens, todayCost := todayTotals(snap, currency)
+	hasToday := todayTokens > 0 || todayCost > 0
+
 	title := "🐋"
-	if snap.Summary != nil {
+	if hasToday {
+		title = "🐋 今日 " + panel.FormatMoney(todayCost, currency) + " · " + panel.FormatTokens(todayTokens)
+	} else if snap.Summary != nil {
 		wallet := pickWallet(snap.Summary, settings.DisplayCurrency)
 		if wallet != nil {
 			title = "🐋 " + panel.FormatMoney(panel.ParseDecimal(wallet.Balance), wallet.Currency)
@@ -592,6 +620,21 @@ func (a *App) trayText(snap *Snapshot, settings panel.Settings) (string, string)
 
 	var parts []string
 	parts = append(parts, "DeepSeek 用量面板")
+	if hasToday {
+		parts = append(parts, fmt.Sprintf("今日：%s · %s Token · %s 请求",
+			panel.FormatMoney(todayCost, currency), panel.FormatTokens(todayTokens),
+			panel.FormatTokens(snap.Report.TotalRequests)))
+	}
+	if snap.Summary != nil {
+		wallet := pickWallet(snap.Summary, settings.DisplayCurrency)
+		if wallet != nil {
+			sub := "余额：" + panel.FormatMoney(panel.ParseDecimal(wallet.Balance), wallet.Currency)
+			if spent := firstTotal(snap.Summary, wallet.Currency); spent != nil {
+				sub += " · 已消费 " + panel.FormatMoney(panel.ParseDecimal(spent.Amount), spent.Currency)
+			}
+			parts = append(parts, sub)
+		}
+	}
 	if snap.LastUpdated != nil {
 		parts = append(parts, "最后更新 "+time.Unix(*snap.LastUpdated, 0).Format("15:04"))
 	} else if snap.ErrorMessage == "" {
@@ -600,7 +643,7 @@ func (a *App) trayText(snap *Snapshot, settings panel.Settings) (string, string)
 	if snap.ErrorMessage != "" && snap.Summary != nil {
 		parts = append(parts, snap.ErrorMessage)
 	}
-	return title, joinParts(parts)
+	return title, strings.Join(parts, "\n")
 }
 
 func pickWallet(summary *deepseek.UserSummary, currency string) *deepseek.Wallet {
@@ -615,15 +658,13 @@ func pickWallet(summary *deepseek.UserSummary, currency string) *deepseek.Wallet
 	return nil
 }
 
-func joinParts(parts []string) string {
-	out := ""
-	for i, p := range parts {
-		if i > 0 {
-			out += " · "
+func firstTotal(summary *deepseek.UserSummary, currency string) *deepseek.CostTotal {
+	for i := range summary.TotalCosts {
+		if summary.TotalCosts[i].Currency == currency {
+			return &summary.TotalCosts[i]
 		}
-		out += p
 	}
-	return out
+	return nil
 }
 
 // ---- 绑定方法（前端调用） ----
