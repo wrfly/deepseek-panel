@@ -13,9 +13,7 @@ final class StatusBarController: NSObject {
     private var refreshTask: Task<Void, Never>?
     private var snapshot = Snapshot()
     private var didAutoOpenMenu = false
-    private var isMenuOpen = false
     private var panelView: UsagePanelView?
-    private var errorItem: NSMenuItem?
     private var lastHourlyFetch: Date?
     private var failureStreak = 0
 
@@ -37,7 +35,7 @@ final class StatusBarController: NSObject {
             name: .periodChanged,
             object: nil
         )
-        rebuildMenu()
+        buildMenu()
         refreshNow()
 
         if ProcessInfo.processInfo.environment["DEEPSEEK_PANEL_DEBUG_MENU"] == "1"
@@ -108,7 +106,7 @@ final class StatusBarController: NSObject {
             )
             snapshot.errorMessage = nil
             snapshot.lastUpdated = now
-            finishRefresh()
+            refreshPanel()
             return
         }
 
@@ -121,7 +119,7 @@ final class StatusBarController: NSObject {
                 snapshot.errorMessage = "尚未配置 Token，请在“设置”中填写。"
                 snapshot.summary = nil
                 snapshot.report = UsageReport()
-                finishRefresh()
+                refreshPanel()
                 return
             }
             token = stored
@@ -179,7 +177,7 @@ final class StatusBarController: NSObject {
             failureStreak += 1
         }
 
-        finishRefresh()
+        refreshPanel()
     }
 
     /// 保证最近 7 天 + 今天都有按小时的数据；已缓存的日期不再远程拉取。
@@ -280,77 +278,36 @@ final class StatusBarController: NSObject {
         return merged.values.sorted { $0.time < $1.time }
     }
 
-    private func finishRefresh() {
-        if isMenuOpen {
-            updateInPlace()
-        } else {
-            rebuildMenu()
-        }
-    }
-
-    private func updateInPlace() {
-        if let panelView, snapshot.summary != nil || !snapshot.report.keys.isEmpty {
-            panelView.update(
-                summary: snapshot.summary,
-                report: snapshot.report,
-                currency: AppSettings.displayCurrency,
-                periodTitle: AppSettings.period.title,
-                lastUpdated: snapshot.lastUpdated
-            )
-        }
-        if let errorItem, let message = snapshot.errorMessage {
-            errorItem.attributedTitle = Self.styled(message, size: 12, color: .systemRed)
-        }
+    private func refreshPanel() {
+        panelView?.update(
+            summary: snapshot.summary,
+            report: snapshot.report,
+            currency: AppSettings.displayCurrency,
+            periodTitle: AppSettings.period.title,
+            lastUpdated: snapshot.lastUpdated,
+            errorMessage: snapshot.errorMessage
+        )
         updateButtonTitle()
     }
 
-    private func rebuildMenu() {
+    /// 菜单只构建一次；后续数据变化通过 panelView.update 原地刷新，
+    /// 避免在菜单打开期间替换 menu 导致白屏。
+    private func buildMenu() {
         let menu = NSMenu()
         menu.autoenablesItems = false
-        menu.delegate = self
 
-        if let error = snapshot.errorMessage {
-            let item = NSMenuItem()
-            item.attributedTitle = Self.styled(error, size: 12, color: .systemRed)
-            item.isEnabled = false
-            errorItem = item
-            menu.addItem(item)
-        } else {
-            errorItem = nil
-        }
-
-        if snapshot.summary != nil || !snapshot.report.keys.isEmpty {
-            if panelView == nil {
-                panelView = UsagePanelView(
-                    summary: snapshot.summary,
-                    report: snapshot.report,
-                    currency: AppSettings.displayCurrency,
-                    periodTitle: AppSettings.period.title,
-                    lastUpdated: snapshot.lastUpdated
-                )
-            } else {
-                panelView?.update(
-                    summary: snapshot.summary,
-                    report: snapshot.report,
-                    currency: AppSettings.displayCurrency,
-                    periodTitle: AppSettings.period.title,
-                    lastUpdated: snapshot.lastUpdated
-                )
-            }
-            let item = NSMenuItem()
-            item.view = panelView
-            menu.addItem(item)
-        } else if snapshot.errorMessage == nil {
-            let header = NSMenuItem()
-            header.attributedTitle = Self.styled("DeepSeek 用量面板", size: 13, weight: .semibold)
-            header.isEnabled = false
-            menu.addItem(header)
-
-            let loading = NSMenuItem()
-            loading.attributedTitle = Self.styled("加载中…", size: 12, color: .secondaryLabelColor)
-            loading.isEnabled = false
-            menu.addItem(loading)
-        }
+        let panel = UsagePanelView(
+            summary: nil,
+            report: UsageReport(),
+            currency: AppSettings.displayCurrency,
+            periodTitle: AppSettings.period.title,
+            lastUpdated: nil,
+            errorMessage: nil
+        )
+        panelView = panel
+        let panelItem = NSMenuItem()
+        panelItem.view = panel
+        menu.addItem(panelItem)
 
         menu.addItem(.separator())
 
@@ -385,13 +342,6 @@ final class StatusBarController: NSObject {
         menu.addItem(quitItem)
 
         statusItem.menu = menu
-        updateButtonTitle()
-
-        if ProcessInfo.processInfo.environment["DEEPSEEK_PANEL_DEBUG"] == "1" {
-            for item in menu.items {
-                print("DEBUG menu item: \(item.title)")
-            }
-        }
     }
 
     private func updateButtonTitle() {
@@ -469,16 +419,5 @@ final class StatusBarController: NSObject {
             }
         }
         return "发生错误：\(error.localizedDescription)"
-    }
-}
-
-extension StatusBarController: NSMenuDelegate {
-    func menuWillOpen(_ menu: NSMenu) {
-        isMenuOpen = true
-    }
-
-    func menuDidClose(_ menu: NSMenu) {
-        isMenuOpen = false
-        rebuildMenu()
     }
 }

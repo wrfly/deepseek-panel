@@ -64,6 +64,7 @@ final class UsagePanelView: NSView {
     private var currency: String
     private var periodTitle: String
     private var lastUpdated: Date?
+    private var errorMessage: String?
 
     private var periodButtons: [(period: StatsPeriod, button: NSButton)] = []
     private let costButton = NSButton()
@@ -79,14 +80,20 @@ final class UsagePanelView: NSView {
         report: UsageReport,
         currency: String,
         periodTitle: String,
-        lastUpdated: Date?
+        lastUpdated: Date?,
+        errorMessage: String? = nil
     ) {
         self.summary = summary
         self.report = report
         self.currency = currency
         self.periodTitle = periodTitle
         self.lastUpdated = lastUpdated
-        let metrics = Self.metrics(modelsCount: report.models.count, keysCount: report.keys.count)
+        self.errorMessage = errorMessage
+        let metrics = Self.metrics(
+            modelsCount: report.models.count,
+            keysCount: report.keys.count,
+            hasError: errorMessage != nil
+        )
         super.init(frame: NSRect(x: 0, y: 0, width: Self.panelWidth, height: metrics.totalHeight))
         configurePeriodTabs(metrics: metrics)
         configureToggleButtons(metrics: metrics)
@@ -103,35 +110,45 @@ final class UsagePanelView: NSView {
         report: UsageReport,
         currency: String,
         periodTitle: String,
-        lastUpdated: Date?
+        lastUpdated: Date?,
+        errorMessage: String?
     ) {
         self.summary = summary
         self.report = report
         self.currency = currency
         self.periodTitle = periodTitle
         self.lastUpdated = lastUpdated
+        self.errorMessage = errorMessage
 
         let metrics = Self.metrics(
             modelsCount: report.models.count,
-            keysCount: report.keys.count
+            keysCount: report.keys.count,
+            hasError: errorMessage != nil
         )
-        if abs(frame.height - metrics.totalHeight) > 0.5 {
-            setFrameSize(NSSize(width: Self.panelWidth, height: metrics.totalHeight))
+        let targetHeight: CGFloat = isLoading ? 76 : metrics.totalHeight
+        if abs(frame.height - targetHeight) > 0.5 {
+            setFrameSize(NSSize(width: Self.panelWidth, height: targetHeight))
         }
-        if abs(currentTrendHeaderY - metrics.trendHeaderY) > 0.5 {
+        if !isLoading, abs(currentTrendHeaderY - metrics.trendHeaderY) > 0.5 {
             currentTrendHeaderY = metrics.trendHeaderY
             costButton.removeFromSuperview()
             tokenButton.removeFromSuperview()
             configureToggleButtons(metrics: metrics)
         }
+        for (_, button) in periodButtons {
+            button.isHidden = isLoading
+        }
+        costButton.isHidden = isLoading
+        tokenButton.isHidden = isLoading
         stylePeriodTabs()
         needsDisplay = true
     }
 
     // MARK: - Layout
 
-    private static func metrics(modelsCount: Int, keysCount: Int) -> Metrics {
+    private static func metrics(modelsCount: Int, keysCount: Int, hasError: Bool) -> Metrics {
         let top: CGFloat = 14
+        let bannerH: CGFloat = hasError ? 22 : 0
         let headerH: CGFloat = 18
         let headerGap: CGFloat = 12
         let heroCaptionH: CGFloat = 12
@@ -153,7 +170,7 @@ final class UsagePanelView: NSView {
         let footerH: CGFloat = 16
         let bottom: CGFloat = 14
 
-        var y = top
+        var y = top + bannerH
         let headerY = y
         y += headerH + headerGap
         let heroCaptionY = y
@@ -314,9 +331,31 @@ final class UsagePanelView: NSView {
     // MARK: - Drawing
 
     override func draw(_ dirtyRect: NSRect) {
-        let m = Self.metrics(modelsCount: report.models.count, keysCount: report.keys.count)
+        if isLoading {
+            draw("🐋 DeepSeek 用量", x: Self.padding, y: 16, width: Self.inner, font: Font.title, color: .labelColor, alignment: .left)
+            draw("加载中…", x: Self.padding, y: 42, width: Self.inner, font: Font.small, color: .secondaryLabelColor, alignment: .center)
+            return
+        }
+
+        let m = Self.metrics(
+            modelsCount: report.models.count,
+            keysCount: report.keys.count,
+            hasError: errorMessage != nil
+        )
         let rightColumnX = Self.padding + 184
         let rightColumnWidth = Self.inner - 184
+
+        if let errorMessage {
+            draw(
+                "⚠️ \(errorMessage)",
+                x: Self.padding,
+                y: 8,
+                width: Self.inner,
+                font: Font.small,
+                color: .systemRed,
+                alignment: .center
+            )
+        }
 
         // 标题
         draw("🐋", x: Self.padding - 2, y: m.headerY, width: 22, font: NSFont.systemFont(ofSize: 14), color: .labelColor, alignment: .left)
@@ -742,8 +781,16 @@ final class UsagePanelView: NSView {
     // MARK: - Hover tracking
 
     private func chartRectNow() -> NSRect {
-        let m = Self.metrics(modelsCount: report.models.count, keysCount: report.keys.count)
+        let m = Self.metrics(
+            modelsCount: report.models.count,
+            keysCount: report.keys.count,
+            hasError: errorMessage != nil
+        )
         return NSRect(x: Self.padding, y: m.chartY, width: Self.inner, height: 56)
+    }
+
+    private var isLoading: Bool {
+        summary == nil && report.keys.isEmpty && errorMessage == nil
     }
 
     override func viewDidMoveToWindow() {

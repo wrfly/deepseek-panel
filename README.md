@@ -1,6 +1,6 @@
 # DeepSeek 用量面板
 
-> 🐋 本项目由 **DeepSeek V4 Pro** 编写。
+> 🐋 本项目由 **DeepSeek V4 Pro + Codex** 独立编写完成。
 
 一个 macOS 菜单栏小应用：在状态栏常驻显示 DeepSeek 平台余额，点击展开菜单查看每个 API Key 的用量与费用。
 
