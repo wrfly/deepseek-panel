@@ -1,6 +1,6 @@
 .build/
-dist/
-build/
+/dist/
+/build/
 App/AppIcon.iconset/
 App/icon-1024.png
 App/AppIcon.icns
