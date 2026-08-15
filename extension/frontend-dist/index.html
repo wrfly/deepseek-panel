@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DeepSeek 用量面板</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="app">
+
+  <!-- ============ 用量面板 ============ -->
+  <div id="view-panel" class="view">
+    <header class="panel-header">
+      <div class="header-left"><span class="whale">🐋</span><span class="title">DeepSeek 用量</span></div>
+      <div class="header-right">
+        <button id="btn-budget" class="link-btn">预算</button>
+        <button id="btn-settings" class="link-btn">设置</button>
+        <button id="btn-refresh" class="link-btn">刷新</button>
+        <div class="period-tabs" id="period-tabs">
+          <button id="period-today" data-period="today">今天</button>
+          <button data-period="last7d">7天</button>
+          <button id="period-more" data-period="thisMonth">本月</button>
+        </div>
+      </div>
+    </header>
+
+    <div id="error-banner" class="error-banner" hidden></div>
+    <div id="loading" class="loading" hidden>🐋 DeepSeek 用量<br><span>加载中…</span></div>
+
+    <section id="panel-content" hidden>
+      <!-- 头卡 -->
+      <div class="hero">
+        <div class="hero-col">
+          <div class="caption">总 Token</div>
+          <div class="hero-value" id="hero-tokens">—</div>
+          <div class="sub" id="hero-left-sub">—</div>
+        </div>
+        <div class="hero-col">
+          <div class="caption">预估费用</div>
+          <div class="hero-cost"><span id="hero-cost">—</span></div>
+          <div class="sub" id="hero-right-sub">—</div>
+        </div>
+      </div>
+
+      <!-- 预算进度条 -->
+      <div id="budget-rows" class="budget-rows"></div>
+
+      <div class="hairline"></div>
+
+      <!-- 按模型 Token -->
+      <div class="section-title">按模型 · Token</div>
+      <div class="model-rows" id="model-token-rows"></div>
+
+      <!-- 按模型 费用 -->
+      <div class="section-title">按模型 · 费用</div>
+      <div class="model-rows" id="model-cost-rows"></div>
+
+      <div class="hairline"></div>
+
+      <div class="requests-row">
+        <span class="caption">请求</span>
+        <span class="value" id="requests-value">—</span>
+      </div>
+
+      <!-- 趋势图 -->
+      <div class="trend-header">
+        <span class="section-title" id="trend-title">费用趋势</span>
+        <div class="toggle-pills">
+          <button id="pill-cost" class="pill">费用</button>
+          <button id="pill-token" class="pill">Token</button>
+        </div>
+      </div>
+      <div id="trend-chart" class="trend-chart"><div class="bars" id="trend-bars"></div><div class="trend-empty" id="trend-empty" hidden></div></div>
+      <div class="axis-row" id="axis-row"></div>
+      <div class="hover-value" id="trend-hover"></div>
+
+      <!-- 各 Key -->
+      <div class="keys-header">
+        <span class="section-title">各 Key 用量</span>
+        <span class="meta" id="keys-meta"></span>
+      </div>
+      <div class="keys-area">
+        <div class="key-rows" id="key-rows"></div>
+        <div id="key-pie" class="key-pie"></div>
+      </div>
+
+      <div class="hairline"></div>
+      <div class="footer-row">
+        <span class="caption">本周期合计</span>
+        <span class="value" id="footer-total">—</span>
+      </div>
+
+      <!-- 热力图 -->
+      <div class="heatmap-header">
+        <span class="section-title">用量热力图</span>
+        <span class="meta" id="heatmap-meta"></span>
+      </div>
+      <div class="heatmap-wrap" id="heatmap-wrap">
+        <div class="heatmap-labels" id="heatmap-labels"></div>
+        <div class="heatmap-grid" id="heatmap-grid"></div>
+      </div>
+      <div class="axis-row"><span class="axis-label" id="heatmap-start"></span><span class="axis-label">现在</span></div>
+      <div class="hover-value" id="heat-hover"></div>
+    </section>
+  </div>
+
+  <!-- ============ 预算管理 ============ -->
+  <div id="view-budget" class="view" hidden>
+    <header class="panel-header">
+      <div class="header-left"><span class="whale">💰</span><span class="title">预算管理</span></div>
+      <div class="header-right">
+        <button id="btn-budget-back" class="link-btn">返回面板</button>
+      </div>
+    </header>
+    <div class="settings-form">
+      <div class="field">
+        <label>当前消耗（跟随显示币种）</label>
+        <div id="budget-summary" class="budget-summary">—</div>
+      </div>
+      <div class="field">
+        <label for="set-budget-daily">每日预算</label>
+        <input type="number" id="set-budget-daily" min="0" step="0.01" placeholder="留空表示不设上限">
+        <p class="hint">面板顶部按「今日消耗 / 每日预算」显示进度。</p>
+      </div>
+      <div class="field">
+        <label for="set-budget-monthly">每月预算</label>
+        <input type="number" id="set-budget-monthly" min="0" step="0.01" placeholder="留空表示不设上限">
+        <p class="hint">按「本月消耗 / 每月预算」显示进度。</p>
+      </div>
+      <div class="field">
+        <label>API Key 预算</label>
+        <div id="key-budget-fields"></div>
+        <p class="hint">每个 Key 可分别设置每日与每月预算，留空表示不设上限。</p>
+      </div>
+      <div class="settings-footer">
+        <span id="budget-save-msg" class="save-msg"></span>
+        <button id="btn-budget-save" class="primary-btn">保存并刷新</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ 设置 ============ -->
+  <div id="view-settings" class="view" hidden>
+    <header class="panel-header">
+      <div class="header-left"><span class="whale">🐋</span><span class="title">设置</span></div>
+      <div class="header-right">
+        <button id="btn-back" class="link-btn">返回面板</button>
+      </div>
+    </header>
+    <div class="settings-form">
+      <div class="field">
+        <label for="set-token">Bearer Token</label>
+        <input type="password" id="set-token" placeholder="粘贴平台会话 Token" spellcheck="false">
+        <p class="hint">这是 DeepSeek 平台网页会话的 Bearer Token（不是 sk- 开头的 API Key）。登录 platform.deepseek.com 后，在用量页面的开发者工具 Network 中复制任意 api/v0 请求的 authorization 头。失效后重新抓取粘贴即可。</p>
+      </div>
+      <div class="field">
+        <label for="set-interval">刷新间隔</label>
+        <select id="set-interval">
+          <option value="1">1 分钟</option>
+          <option value="5">5 分钟</option>
+          <option value="15">15 分钟</option>
+          <option value="30">30 分钟</option>
+          <option value="60">60 分钟</option>
+        </select>
+        <p class="hint">平台用量统计本身有约 5 分钟延迟，建议设为 5 分钟或更长，避免频繁请求被限流。</p>
+      </div>
+      <div class="field">
+        <label for="set-period">统计周期</label>
+        <select id="set-period">
+          <option value="today">今天</option>
+          <option value="last24h">最近 24 小时</option>
+          <option value="last7d">最近 7 天</option>
+          <option value="last30d">最近 30 天</option>
+          <option value="thisMonth">本月</option>
+          <option value="lastMonth">上个月</option>
+        </select>
+      </div>
+      <div class="field">
+        <label for="set-currency">显示币种</label>
+        <select id="set-currency">
+          <option value="CNY">CNY（¥）</option>
+          <option value="USD">USD（$）</option>
+        </select>
+      </div>
+
+      <div class="field">
+        <label for="set-heatmap">热力图指标</label>
+        <select id="set-heatmap">
+          <option value="tokens">Token 用量</option>
+          <option value="cost">消耗（费用）</option>
+        </select>
+      </div>
+      <div class="field">
+        <label for="set-tray">菜单栏显示</label>
+        <select id="set-tray">
+          <option value="todayBoth">今日花费 + Token</option>
+          <option value="todayCost">今日花费</option>
+          <option value="todayTokens">今日 Token</option>
+          <option value="balance">余额</option>
+          <option value="none">仅图标</option>
+        </select>
+        <p class="hint">在系统托盘/菜单栏图标旁显示的文字（macOS 菜单栏与 Linux 托盘均可）。</p>
+      </div>
+      <div class="field checkbox-field">
+        <label class="checkbox"><input type="checkbox" id="set-mock"> 使用本地模拟数据（离线测试，不联网）</label>
+      </div>
+      <div class="field checkbox-field">
+        <label class="checkbox"><input type="checkbox" id="set-autostart"> 登录时自动启动</label>
+      </div>
+      <div class="settings-footer">
+        <span id="save-msg" class="save-msg"></span>
+        <button id="btn-save" class="primary-btn">保存并刷新</button>
+      </div>
+    </div>
+  </div>
+
+</div>
+<script src="vendor/echarts.min.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

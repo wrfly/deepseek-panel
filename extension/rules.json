@@ -1,0 +1,18 @@
+[
+  {
+    "id": 1,
+    "priority": 1,
+    "action": {
+      "type": "modifyHeaders",
+      "requestHeaders": [
+        { "header": "referer", "operation": "set", "value": "https://platform.deepseek.com/usage" },
+        { "header": "user-agent", "operation": "set", "value": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 Safari/537.36" },
+        { "header": "x-client-platform", "operation": "set", "value": "web" }
+      ]
+    },
+    "condition": {
+      "urlFilter": "||platform.deepseek.com/api/v0/*",
+      "resourceTypes": ["xmlhttprequest"]
+    }
+  }
+]

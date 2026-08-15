@@ -61,6 +61,22 @@ make mac            # 生成 build/DeepSeekPanel.app（LSUIElement：仅菜单�
 cp -r build/DeepSeekPanel.app /Applications/
 ```
 
+### Chrome 扩展
+
+桌面版的全部功能也做成了 Chrome 扩展（同一份前端与统计逻辑的 JS 移植）：
+
+1. 同步前端资源并校验：`./scripts/build-extension.sh`
+2. 打开 `chrome://extensions`，开启「开发者模式」
+3. 「加载已解压的扩展程序」→ 选择仓库的 `extension/` 目录
+
+与桌面版的差异：
+
+- 没有托盘：扩展图标上显示 badge（今日 Token / 费用，可在设置中选择显示内容），点击图标打开完整面板
+- 数据与设置存在 Chrome 本地（`chrome.storage.local`），Token 不落盘
+- 预算超支时弹系统通知
+- 请求头（UA / Referer / x-client-platform）由 declarativeNetRequest 规则补齐，与桌面版一致
+- 改了 `frontend/dist` 后需要重新运行 `./scripts/build-extension.sh` 同步
+
 ## 使用
 
 1. 首次启动会在设置中提示填写 Token（应用无 Token 时面板顶部显示提示）。
