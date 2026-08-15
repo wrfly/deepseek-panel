@@ -265,11 +265,17 @@ function renderTrend(snap) {
   const axisRow = $("axis-row");
   if (axisRow) {
     axisRow.innerHTML = "";
-    const step = Math.max(Math.floor(points.length / 4), 1);
+    // 柱子足够宽（点数少，如今天）时每根柱子都显示小时数字；
+    // 点数多（跨天）时按间隔显示日期时间。
+    const barW = box.clientWidth / Math.max(points.length, 1);
+    const showEvery = barW >= 16 ? 1 : Math.max(Math.floor(points.length / 4), 1);
+    const hourNum = (ts) => String(new Date(ts * 1000).getHours());
     points.forEach((p, i) => {
       const isLast = i === points.length - 1;
-      const show = isLast || (i % step === 0);
-      const label = isLast ? "现在" : (show ? (showHour ? hourFmt(p.time) : fmtTime(p.time, true)) : "");
+      const show = isLast || (i % showEvery === 0);
+      let label = "";
+      if (isLast) label = "现在";
+      else if (show) label = showHour ? hourNum(p.time) : fmtTime(p.time, true);
       axisRow.appendChild(el("span", "axis-tick", label));
     });
   }
