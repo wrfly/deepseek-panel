@@ -135,7 +135,7 @@ body {
 /* 热力图 */
 .heatmap-header { display: flex; justify-content: space-between; align-items: center; }
 .heatmap-header .meta { font-size: 9px; color: var(--fg-faint); }
-.heatmap-wrap { display: flex; gap: 4px; margin-top: 4px; }
+.heatmap-wrap { display: flex; gap: 4px; margin-top: 4px; position: relative; }
 .heatmap-labels { display: flex; flex-direction: column; width: 14px; font-size: 8px; color: var(--fg-faint); }
 .heatmap-labels span { height: 11px; line-height: 11px; text-align: right; padding-right: 2px; }
 .heatmap-grid { display: flex; gap: 2px; justify-content: space-between; flex: 1; min-width: 0; }

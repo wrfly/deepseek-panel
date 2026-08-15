@@ -240,11 +240,14 @@ function renderTrend(snap) {
       const time = showHour ? hourFmt(pt.time) : fmtTime(pt.time, true);
       const val = isCost ? formatMoney(values[i], snap.currency) : formatTokens(values[i]) + " Token";
       tooltip.textContent = time + "  " + val;
-      tooltip.style.display = "block";
-      let x = clientX - tooltip.offsetWidth / 2;
-      x = Math.max(6, Math.min(x, window.innerWidth - tooltip.offsetWidth - 6));
+      if (tooltip.parentNode !== box) box.appendChild(tooltip);
+      tooltip.style.position = "absolute";
+      const brect = box.getBoundingClientRect();
+      let x = clientX - brect.left - tooltip.offsetWidth / 2;
+      x = Math.max(2, Math.min(x, brect.width - tooltip.offsetWidth - 2));
       tooltip.style.left = x + "px";
-      tooltip.style.top = (clientY - tooltip.offsetHeight - 10) + "px";
+      tooltip.style.top = (clientY - brect.top - tooltip.offsetHeight - 8) + "px";
+      tooltip.style.display = "block";
     };
     const clearTip = () => {
       if (hoverIndex >= 0) bars[hoverIndex].classList.remove("hover");
@@ -259,6 +262,8 @@ function renderTrend(snap) {
       showTip(index, e.clientX, e.clientY);
     });
     box.addEventListener("mouseleave", clearTip);
+
+
   }
 
   // 轴标签
@@ -422,28 +427,33 @@ let sharedTooltip = null;
 function makeHeatmapTooltip() {
   if (sharedTooltip) return sharedTooltip;
   const tip = el("div", "heatmap-tooltip");
-  tip.style.cssText = "position:fixed;pointer-events:none;background:" + cssVar("--tooltip-bg", "rgba(30, 33, 41, 0.97)") + ";" +
-    "border:1px solid " + cssVar("--hairline", "#2a2e37") + ";border-radius:4px;padding:3px 8px;font-size:10px;" +
-    "color:" + cssVar("--fg", "#e8eaed") + ";z-index:99;white-space:nowrap;font-variant-numeric:tabular-nums;display:none;";
-  document.body.appendChild(tip);
+  tip.style.cssText = "pointer-events:none;background:" + cssVar("--tooltip-bg", "rgba(30, 33, 41, 0.97)") + ";" +
+    "border:1px solid " + cssVar("--accent", "#4f8ef7") + ";border-radius:4px;padding:4px 9px;font-size:11px;" +
+    "color:" + cssVar("--fg", "#e8eaed") + ";z-index:99;white-space:nowrap;font-variant-numeric:tabular-nums;" +
+    "box-shadow:0 2px 8px rgba(0,0,0,0.4);display:none;";
   sharedTooltip = tip;
   return tip;
 }
 
 function showHeatmapTooltip(tip, cell, row, col, snap, e) {
   if (!snap.heatmapStart) return;
+  const wrap = $("heatmap-wrap");
+  if (wrap && tip.parentNode !== wrap) wrap.appendChild(tip);
   const d = new Date((snap.heatmapStart + (col * 7 + row) * 86400) * 1000);
   const dateText = (d.getMonth() + 1) + "/" + d.getDate();
   tip.textContent = dateText + " \u00b7 " + formatTokens(cell.tokens) + " Token \u00b7 " +
                     formatMoney(cell.cost, snap.currency);
   tip.style.display = "block";
-  const pad = 12;
-  let x = e.clientX + pad, y = e.clientY + pad;
-  const rect = tip.getBoundingClientRect();
-  if (x + rect.width > window.innerWidth) x = e.clientX - rect.width - pad;
-  if (y + rect.height > window.innerHeight) y = e.clientY - rect.height - pad;
-  tip.style.left = x + "px";
-  tip.style.top = y + "px";
+  if (wrap) {
+    tip.style.position = "absolute";
+    const r = wrap.getBoundingClientRect();
+    let x = e.clientX - r.left + 10;
+    let y = e.clientY - r.top + 10;
+    if (x + tip.offsetWidth > r.width) x = e.clientX - r.left - tip.offsetWidth - 10;
+    if (y + tip.offsetHeight > r.height) y = e.clientY - r.top - tip.offsetHeight - 10;
+    tip.style.left = Math.max(0, x) + "px";
+    tip.style.top = Math.max(0, y) + "px";
+  }
 }
 
 /* ---------------- 设置页 ---------------- */
