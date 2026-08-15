@@ -114,7 +114,7 @@ function renderAll(snap) {
 }
 
 function renderHero(snap) {
-  const r = snap.report;
+  const r = snap.report || {};
   $("hero-tokens").textContent = formatTokens(r.totalTokens);
   $("hero-cost").textContent = formatMoney(r.totalCost, snap.currency);
 
@@ -153,7 +153,7 @@ function renderHero(snap) {
 }
 
 function renderModels(snap) {
-  const r = snap.report;
+  const r = snap.report || {};
   // Token 行
   const tokenBox = $("model-token-rows");
   tokenBox.innerHTML = "";
@@ -183,12 +183,12 @@ function renderModels(snap) {
 }
 
 function renderRequests(snap) {
-  const r = snap.report;
+  const r = snap.report || {};
   $("requests-value").textContent = formatTokens(r.totalRequests) + " \u00b7 " + r.keys.length + " \u4e2a Key";
 }
 
 function renderTrend(snap) {
-  const r = snap.report;
+  const r = snap.report || {};
   const isCost = state.trendMode === "cost";
   $("trend-title").textContent = isCost ? "\u8d39\u7528\u8d8b\u52bf" : "Token \u8d8b\u52bf";
   $("pill-cost").classList.toggle("selected", isCost);
@@ -277,7 +277,7 @@ function renderTrend(snap) {
 }
 
 function renderKeys(snap) {
-  const r = snap.report;
+  const r = snap.report || {};
   const box = $("key-rows");
   box.innerHTML = "";
 
@@ -353,7 +353,7 @@ function renderKeys(snap) {
 }
 
 function renderFooter(snap) {
-  const r = snap.report;
+  const r = snap.report || {};
   $("footer-total").textContent =
     formatMoney(r.totalCost, snap.currency) + "  \u00b7  " + formatTokens(r.totalTokens) + " Token  \u00b7  " +
     formatTokens(r.totalRequests) + " \u8bf7\u6c42";
