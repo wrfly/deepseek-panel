@@ -24,6 +24,16 @@ function fmtTime(ts, withDate) {
   return hh + ":" + mm;
 }
 
+/* ---------------- CSS 变量取值（ECharts canvas 不认 var()，需取具体值） ---------------- */
+function cssVar(name, fallback) {
+  try {
+    const v = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+    return v || fallback;
+  } catch (_) {
+    return fallback;
+  }
+}
+
 /* ---------------- 调色板（对应 Swift palette） ---------------- */
 const PALETTE = ["#4f8ef7", "#a78bfa", "#2dd4bf", "#f59e0b", "#f472b6", "#4ade80", "#818cf8", "#22d3ee"];
 const paletteColor = (i) => PALETTE[i % PALETTE.length];
@@ -180,6 +190,10 @@ function renderTrend(snap) {
 
   const chart = $("trend-chart");
   if (!state.trendChart) state.trendChart = echarts.init(chart);
+  const accent = cssVar("--accent", "#4f8ef7");
+  const tooltipBg = cssVar("--tooltip-bg", "rgba(30, 33, 41, 0.97)");
+  const hairline = cssVar("--hairline", "#2a2e37");
+  const fgColor = cssVar("--fg", "#e8eaed");
   const points = r.trend || [];
   const first = points.length ? points[0].time : 0;
   const last = points.length ? points[points.length - 1].time : 0;
@@ -215,7 +229,7 @@ function renderTrend(snap) {
         const time = showHour ? hourFmt(pt.time) : fmtTime(pt.time, true);
         const val = isCost ? formatMoney(values[p.dataIndex], snap.currency)
                            : formatTokens(values[p.dataIndex]) + " Token";
-        return '<div style="background:var(--tooltip-bg);border:1px solid var(--hairline);border-radius:4px;padding:3px 8px;font-size:10px;color:var(--fg);font-variant-numeric:tabular-nums;">' +
+        return '<div style="background:' + tooltipBg + ';border:1px solid ' + hairline + ';border-radius:4px;padding:3px 8px;font-size:10px;color:' + fgColor + ';font-variant-numeric:tabular-nums;">' +
                time + "&nbsp;&nbsp;" + val + "</div>";
       },
     },
@@ -223,8 +237,8 @@ function renderTrend(snap) {
       type: "bar",
       data: data.map(([t, v]) => [t, v > 0 ? v : null]),
       barWidth: "55%",
-      itemStyle: { color: "var(--accent)", borderRadius: [2, 2, 0, 0], opacity: 0.55 },
-      emphasis: { itemStyle: { color: "var(--accent)", opacity: 1 } },
+      itemStyle: { color: accent, borderRadius: [2, 2, 0, 0], opacity: 0.55 },
+      emphasis: { itemStyle: { color: accent, opacity: 1 } },
     }],
   }, true);
 
@@ -286,18 +300,20 @@ function renderKeys(snap) {
       animation: false,
       series: [{
         type: "pie", radius: ["58%", "78%"], silent: true,
-        data: [{ value: 1, itemStyle: { color: "var(--pill-bg)" } }],
+        data: [{ value: 1, itemStyle: { color: cssVar("--pill-bg", "rgba(255,255,255,0.08)") } }],
         label: { show: false }, labelLine: { show: false },
       }],
-      graphic: [{ type: "text", left: "center", top: "middle", style: { text: "\u2014", fill: "var(--fg-faint)", fontSize: 10 } }],
+      graphic: [{ type: "text", left: "center", top: "middle", style: { text: "\u2014", fill: cssVar("--fg-faint", "#5f6368"), fontSize: 10 } }],
     }, true);
     return;
   }
   state.pieChart.setOption({
     animation: false,
     tooltip: {
-      confine: true, backgroundColor: "var(--tooltip-bg)", borderColor: "var(--hairline)",
-      textStyle: { color: "var(--fg)", fontSize: 10 },
+      confine: true,
+      backgroundColor: cssVar("--tooltip-bg", "rgba(30, 33, 41, 0.97)"),
+      borderColor: cssVar("--hairline", "#2a2e37"),
+      textStyle: { color: cssVar("--fg", "#e8eaed"), fontSize: 10 },
       formatter: (p) => p.name + "&nbsp;&nbsp;" + (useCosts ? formatMoney(p.value, snap.currency) : formatTokens(p.value) + " Token") + " \u00b7 " + formatPercent(p.value / total),
     },
     series: [{
@@ -310,7 +326,7 @@ function renderKeys(snap) {
     graphic: [{
       type: "text", left: "center", top: "middle",
       style: { text: useCosts ? formatMoney(total, snap.currency) : formatTokens(total),
-               fill: "var(--fg)", fontSize: 9, fontWeight: 600 },
+               fill: cssVar("--fg", "#e8eaed"), fontSize: 9, fontWeight: 600 },
     }],
   }, true);
 }
@@ -385,9 +401,9 @@ function renderHeatmap(snap) {
 
 function makeHeatmapTooltip() {
   const tip = el("div", "heatmap-tooltip");
-  tip.style.cssText = "position:fixed;pointer-events:none;background:var(--tooltip-bg);" +
-    "border:1px solid var(--hairline);border-radius:4px;padding:3px 8px;font-size:10px;" +
-    "color:var(--fg);z-index:99;white-space:nowrap;font-variant-numeric:tabular-nums;display:none;";
+  tip.style.cssText = "position:fixed;pointer-events:none;background:" + cssVar("--tooltip-bg", "rgba(30, 33, 41, 0.97)") + ";" +
+    "border:1px solid " + cssVar("--hairline", "#2a2e37") + ";border-radius:4px;padding:3px 8px;font-size:10px;" +
+    "color:" + cssVar("--fg", "#e8eaed") + ";z-index:99;white-space:nowrap;font-variant-numeric:tabular-nums;display:none;";
   document.body.appendChild(tip);
   return tip;
 }
