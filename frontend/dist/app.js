@@ -592,7 +592,9 @@ function renderKeyBudgetInputs(snap) {
   const s = snap.settings || {};
   const daily = s.keyDailyBudgets || {};
   const monthly = s.keyMonthlyBudgets || {};
-  const names = ((snap.report && snap.report.keys) || []).map((k) => k.name);
+  const names = snap.allKeys && snap.allKeys.length
+    ? snap.allKeys
+    : ((snap.report && snap.report.keys) || []).map((k) => k.name);
   // 移除已不存在的 key 输入行
   Array.prototype.slice.call(box.children).forEach((row) => {
     const input = row.querySelector("input");
@@ -869,6 +871,7 @@ function mockSnapshot() {
       { label: "codex 今日", key: "codex", period: "day", used: 2.1, limit: 20, ratio: 0.105, over: false },
       { label: "codex 本月", key: "codex", period: "month", used: 31.23, limit: 40, ratio: 0.7808, over: false },
     ],
+    allKeys: keys.map((k) => k.name),
     todayCost: 3.52,
     monthCost: 62.1,
     settings: {

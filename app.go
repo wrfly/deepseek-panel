@@ -93,6 +93,7 @@ type BudgetStatus struct {
 type Snapshot struct {
 	Summary      *deepseek.UserSummary `json:"summary"`
 	Report       ReportJSON            `json:"report"`
+	AllKeys      []string              `json:"allKeys"` // 全部 API Key 名（与统计窗口无关，供预算管理使用）
 	Currency     string                `json:"currency"`
 	Period       string                `json:"period"`
 	PeriodTitle  string                `json:"periodTitle"`
@@ -263,6 +264,7 @@ func (a *App) refresh() {
 		summary, keys, amount, cost := a.mock.Fetch(window, tz)
 		report := panel.Build(keys, *amount, *cost, window, settings.DisplayCurrency)
 		snap.Summary = summary
+		snap.AllKeys = keyNames(keys)
 		snap.Report = a.reportJSON(report, settings.DisplayCurrency)
 		snap.Heatmap = panel.MockHeatmap(a.mock, tz, settings.DisplayCurrency, now)
 		snap.HeatmapStart = panel.HeatmapStartMonday(now).Unix()
@@ -284,6 +286,7 @@ func (a *App) refresh() {
 				prev := a.currentSnapshot()
 				snap.Summary = prev.Summary
 				snap.Report = prev.Report
+				snap.AllKeys = prev.AllKeys
 				snap.Heatmap = prev.Heatmap
 				snap.HeatmapStart = prev.HeatmapStart
 				snap.LastUpdated = prev.LastUpdated
@@ -298,6 +301,7 @@ func (a *App) refresh() {
 				}
 				report.Trend = a.combinedTrend(window, fetched)
 				snap.Summary = summary
+				snap.AllKeys = keyNames(keys)
 				snap.Report = a.reportJSON(report, settings.DisplayCurrency)
 				ts := now.Unix()
 				snap.LastUpdated = &ts
@@ -660,29 +664,36 @@ func (a *App) budgetStatus(snap *Snapshot, settings panel.Settings, keyCostsToda
 			Limit: settings.MonthlyBudget,
 		})
 	}
-	if len(settings.KeyDailyBudgets) > 0 || len(settings.KeyMonthlyBudgets) > 0 {
+	// 遍历完整 Key 列表（含当前窗口无用量的 Key），保证设置了预算的 Key 始终显示
+	keyNames := snap.AllKeys
+	if len(keyNames) == 0 {
 		for _, key := range snap.Report.Keys {
-			if limit, ok := settings.KeyDailyBudgets[key.Name]; ok && limit > 0 {
+			keyNames = append(keyNames, key.Name)
+		}
+	}
+	if len(settings.KeyDailyBudgets) > 0 || len(settings.KeyMonthlyBudgets) > 0 {
+		for _, name := range keyNames {
+			if limit, ok := settings.KeyDailyBudgets[name]; ok && limit > 0 {
 				used := 0.0
 				if keyCostsToday != nil {
-					used = keyCostsToday[key.Name]
+					used = keyCostsToday[name]
 				}
 				out = append(out, BudgetStatus{
-					Label:  key.Name + " 今日",
-					Key:    key.Name,
+					Label:  name + " 今日",
+					Key:    name,
 					Period: "day",
 					Used:   used,
 					Limit:  limit,
 				})
 			}
-			if limit, ok := settings.KeyMonthlyBudgets[key.Name]; ok && limit > 0 {
+			if limit, ok := settings.KeyMonthlyBudgets[name]; ok && limit > 0 {
 				used := 0.0
 				if keyCostsMonth != nil {
-					used = keyCostsMonth[key.Name]
+					used = keyCostsMonth[name]
 				}
 				out = append(out, BudgetStatus{
-					Label:  key.Name + " 本月",
-					Key:    key.Name,
+					Label:  name + " 本月",
+					Key:    name,
 					Period: "month",
 					Used:   used,
 					Limit:  limit,
@@ -795,6 +806,18 @@ func (a *App) budgetPoints(snap *Snapshot) []panel.TrendPoint {
 	for _, p := range snap.Report.Trend {
 		out = append(out, panel.TrendPoint{Time: p.Time, Tokens: p.Tokens, CostCNY: p.CostCNY, CostUSD: p.CostUSD})
 	}
+	return out
+}
+
+// keyNames 从 API Key 列表提取全部 Key 名（按名字排序，保证预算管理页顺序稳定）。
+func keyNames(keys []deepseek.APIKeyInfo) []string {
+	out := make([]string, 0, len(keys))
+	for _, k := range keys {
+		out = append(out, k.Name)
+	}
+	sort.Slice(out, func(i, j int) bool {
+		return strings.ToLower(out[i]) < strings.ToLower(out[j])
+	})
 	return out
 }
 
