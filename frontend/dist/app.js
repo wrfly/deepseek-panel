@@ -216,7 +216,7 @@ function renderTrend(snap) {
     empty.hidden = false;
   } else {
     empty.hidden = true;
-    const tooltip = makeHeatmapTooltip();
+    const tooltip = getTrendTip();
     const bars = [];
     let hoverIndex = -1;
     values.forEach((v, i) => {
@@ -240,8 +240,6 @@ function renderTrend(snap) {
       const time = showHour ? hourFmt(pt.time) : fmtTime(pt.time, true);
       const val = isCost ? formatMoney(values[i], snap.currency) : formatTokens(values[i]) + " Token";
       tooltip.textContent = time + "  " + val;
-      if (tooltip.parentNode !== box) box.appendChild(tooltip);
-      tooltip.style.position = "absolute";
       const brect = box.getBoundingClientRect();
       let x = clientX - brect.left - tooltip.offsetWidth / 2;
       x = Math.max(2, Math.min(x, brect.width - tooltip.offsetWidth - 2));
@@ -262,7 +260,6 @@ function renderTrend(snap) {
       showTip(index, e.clientX, e.clientY);
     });
     box.addEventListener("mouseleave", clearTip);
-
 
   }
 
@@ -389,7 +386,7 @@ function renderHeatmap(snap) {
   labels.innerHTML = "";
   WEEKDAY_LABELS.forEach((w) => labels.appendChild(el("span", "", w)));
 
-  const hoverTooltip = makeHeatmapTooltip();
+  const hoverTooltip = getHeatTip();
   // GitHub 样式：列 = 周（24 列，最近 24 周，最左为最早），行 = 星期（7 行，周一~周日）。
   for (let w = 0; w < 24; w++) {
     const col = el("div", "heatmap-col");
@@ -423,29 +420,56 @@ function renderHeatmap(snap) {
   } else { $("heatmap-start").textContent = ""; }
 }
 
-let sharedTooltip = null;
-function makeHeatmapTooltip() {
-  if (sharedTooltip) return sharedTooltip;
-  const tip = el("div", "heatmap-tooltip");
-  tip.style.cssText = "pointer-events:none;background:" + cssVar("--tooltip-bg", "rgba(30, 33, 41, 0.97)") + ";" +
+// tooltip 必须在页面加载时就创建并放入容器：WebKitGTK 不绘制页面渲染后
+// 动态插入的 DOM 元素（ECharts 的 tooltip 能显示正是因为它在 init 时创建）。
+// 趋势图与热力图各自持有静态 tooltip，hover 时只更新内容与位置。
+function makeTip(container, className) {
+  const tip = el("div", className);
+  tip.style.cssText = "position:absolute;pointer-events:none;background:" + cssVar("--tooltip-bg", "rgba(30, 33, 41, 0.97)") + ";" +
     "border:1px solid " + cssVar("--accent", "#4f8ef7") + ";border-radius:4px;padding:4px 9px;font-size:11px;" +
     "color:" + cssVar("--fg", "#e8eaed") + ";z-index:99;white-space:nowrap;font-variant-numeric:tabular-nums;" +
     "box-shadow:0 2px 8px rgba(0,0,0,0.4);display:none;";
-  sharedTooltip = tip;
+  container.appendChild(tip);
   return tip;
+}
+
+let trendTip = null;
+let heatTip = null;
+
+// 页面加载时静态创建 tooltip 并放入容器：WebKitGTK 不绘制页面渲染后
+// 动态插入的 DOM 元素（ECharts 的 tooltip 能显示正因为它在 init 时创建）。
+(function () {
+  var c1 = document.getElementById("trend-chart");
+  if (c1) trendTip = makeTip(c1, "trend-tip");
+  var c2 = document.getElementById("heatmap-wrap");
+  if (c2) heatTip = makeTip(c2, "heatmap-tip");
+})();
+
+function getTrendTip() {
+  if (!trendTip) {
+    var c = document.getElementById("trend-chart");
+    if (c) trendTip = makeTip(c, "trend-tip");
+  }
+  return trendTip;
+}
+
+function getHeatTip() {
+  if (!heatTip) {
+    var c = document.getElementById("heatmap-wrap");
+    if (c) heatTip = makeTip(c, "heatmap-tip");
+  }
+  return heatTip;
 }
 
 function showHeatmapTooltip(tip, cell, row, col, snap, e) {
   if (!snap.heatmapStart) return;
   const wrap = $("heatmap-wrap");
-  if (wrap && tip.parentNode !== wrap) wrap.appendChild(tip);
   const d = new Date((snap.heatmapStart + (col * 7 + row) * 86400) * 1000);
   const dateText = (d.getMonth() + 1) + "/" + d.getDate();
   tip.textContent = dateText + " \u00b7 " + formatTokens(cell.tokens) + " Token \u00b7 " +
                     formatMoney(cell.cost, snap.currency);
   tip.style.display = "block";
   if (wrap) {
-    tip.style.position = "absolute";
     const r = wrap.getBoundingClientRect();
     let x = e.clientX - r.left + 10;
     let y = e.clientY - r.top + 10;
@@ -692,7 +716,7 @@ window.__selftest = function () {
       if (!box || !box.children.length) return "no-bars";
       const rect = box.getBoundingClientRect();
       box.dispatchEvent(new MouseEvent("mousemove", { clientX: rect.left + rect.width * 0.3, clientY: rect.top + 10 }));
-      const tip = sharedTooltip;
+      const tip = heatTip || trendTip;
       if (!tip || tip.style.display === "none") return "hidden";
       return tip.textContent;
     })(),
