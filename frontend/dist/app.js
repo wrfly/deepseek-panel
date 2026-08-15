@@ -217,31 +217,48 @@ function renderTrend(snap) {
   } else {
     empty.hidden = true;
     const tooltip = makeHeatmapTooltip();
+    const bars = [];
+    let hoverIndex = -1;
     values.forEach((v, i) => {
       const bar = el("div", "bar");
       const h = v > 0 ? Math.max((v / maxV) * 100, 3) : 0;
       bar.style.height = h + "%";
       if (v <= 0) bar.style.opacity = "0.15";
-      bar.addEventListener("mouseenter", (e) => {
-        bar.classList.add("hover");
-        const pt = points[i];
-        const time = showHour ? hourFmt(pt.time) : fmtTime(pt.time, true);
-        const val = isCost ? formatMoney(values[i], snap.currency) : formatTokens(values[i]) + " Token";
-        tooltip.textContent = time + "  " + val;
-        tooltip.style.display = "block";
-        const r2 = bar.getBoundingClientRect();
-        let x = r2.left + r2.width / 2 - tooltip.offsetWidth / 2;
-        x = Math.max(6, Math.min(x, window.innerWidth - tooltip.offsetWidth - 6));
-        tooltip.style.left = x + "px";
-        tooltip.style.top = (r2.top - tooltip.offsetHeight - 4) + "px";
-      });
-      bar.addEventListener("mousemove", () => {});
-      bar.addEventListener("mouseleave", () => {
-        bar.classList.remove("hover");
-        tooltip.style.display = "none";
-      });
+      bars.push(bar);
       box.appendChild(bar);
     });
+
+    // 整个图表区域响应鼠标移动，自动定位最近柱子并展示具体数字
+    // （柱子太矮时直接悬停柱子几乎不可能命中）。
+    const showTip = (i, clientX, clientY) => {
+      if (i !== hoverIndex) {
+        if (hoverIndex >= 0) bars[hoverIndex].classList.remove("hover");
+        hoverIndex = i;
+        bars[i].classList.add("hover");
+      }
+      const pt = points[i];
+      const time = showHour ? hourFmt(pt.time) : fmtTime(pt.time, true);
+      const val = isCost ? formatMoney(values[i], snap.currency) : formatTokens(values[i]) + " Token";
+      tooltip.textContent = time + "  " + val;
+      tooltip.style.display = "block";
+      let x = clientX - tooltip.offsetWidth / 2;
+      x = Math.max(6, Math.min(x, window.innerWidth - tooltip.offsetWidth - 6));
+      tooltip.style.left = x + "px";
+      tooltip.style.top = (clientY - tooltip.offsetHeight - 10) + "px";
+    };
+    const clearTip = () => {
+      if (hoverIndex >= 0) bars[hoverIndex].classList.remove("hover");
+      hoverIndex = -1;
+      tooltip.style.display = "none";
+    };
+    box.addEventListener("mousemove", (e) => {
+      const rect = box.getBoundingClientRect();
+      if (!rect.width) return;
+      const fraction = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+      const index = Math.min(points.length - 1, Math.floor(fraction * points.length));
+      showTip(index, e.clientX, e.clientY);
+    });
+    box.addEventListener("mouseleave", clearTip);
   }
 
   // 轴标签
@@ -660,6 +677,15 @@ window.__selftest = function () {
     keysMeta: $("keys-meta") ? $("keys-meta").textContent : "",
     footerTotal: $("footer-total") ? $("footer-total").textContent : "",
     viewPanelHidden: $("view-panel") ? $("view-panel").hidden : true,
+    hoverTooltip: (function () {
+      const box = $("trend-bars");
+      if (!box || !box.children.length) return "no-bars";
+      const rect = box.getBoundingClientRect();
+      box.dispatchEvent(new MouseEvent("mousemove", { clientX: rect.left + rect.width * 0.3, clientY: rect.top + 10 }));
+      const tip = sharedTooltip;
+      if (!tip || tip.style.display === "none") return "hidden";
+      return tip.textContent;
+    })(),
   };
 };
 if (typeof window.__selftest === "function") {
