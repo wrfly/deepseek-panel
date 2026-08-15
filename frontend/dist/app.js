@@ -239,18 +239,15 @@ function renderTrend(snap) {
       const pt = points[i];
       const time = showHour ? hourFmt(pt.time) : fmtTime(pt.time, true);
       const val = isCost ? formatMoney(values[i], snap.currency) : formatTokens(values[i]) + " Token";
-      tooltip.textContent = time + "  " + val;
-      const brect = box.getBoundingClientRect();
-      let x = clientX - brect.left - tooltip.offsetWidth / 2;
-      x = Math.max(2, Math.min(x, brect.width - tooltip.offsetWidth - 2));
-      tooltip.style.left = x + "px";
-      tooltip.style.top = (clientY - brect.top - tooltip.offsetHeight - 8) + "px";
-      tooltip.style.display = "block";
+      // 可靠方案：更新图表下方的文档流文本条（浮动层在 WebKitGTK 下不绘制）。
+      const hv = $("trend-hover");
+      if (hv) hv.textContent = time + "  " + val;
     };
     const clearTip = () => {
       if (hoverIndex >= 0) bars[hoverIndex].classList.remove("hover");
       hoverIndex = -1;
-      tooltip.style.display = "none";
+      const hv = $("trend-hover");
+      if (hv) hv.textContent = "";
     };
     box.addEventListener("mousemove", (e) => {
       const rect = box.getBoundingClientRect();
@@ -258,6 +255,7 @@ function renderTrend(snap) {
       const fraction = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
       const index = Math.min(points.length - 1, Math.floor(fraction * points.length));
       showTip(index, e.clientX, e.clientY);
+      reportError("trend-tip2 disp=" + tooltip.style.display + " text=" + tooltip.textContent);
     });
     box.addEventListener("mouseleave", clearTip);
 
@@ -369,6 +367,10 @@ function renderHeatmap(snap) {
 
   const grid = $("heatmap-grid");
   grid.innerHTML = "";
+  const hv0 = $("heat-hover");
+  if (hv0) hv0.textContent = "";
+  const hv0 = $("heat-hover");
+  if (hv0) hv0.textContent = "";
   // 计算格子尺寸铺满可用宽度（不用 aspect-ratio，WebKitGTK 下会高度塌陷）。
   // 可用宽 = 容器宽 - 星期标签宽 - wrap 间距(4px)；grid 内部 23 个 2px 间隙。
   const wrap = grid.parentElement;
@@ -405,9 +407,10 @@ function renderHeatmap(snap) {
         });
         cell.addEventListener("mousemove", (e) => showHeatmapTooltip(hoverTooltip, c, r, w, snap, e));
         cell.addEventListener("mouseleave", () => {
-          cell.classList.remove("hover");
-          hoverTooltip.hidden = true;
-        });
+        cell.classList.remove("hover");
+        const hv = $("heat-hover");
+        if (hv) hv.textContent = "";
+      });
       }
       col.appendChild(cell);
     }
@@ -463,21 +466,11 @@ function getHeatTip() {
 
 function showHeatmapTooltip(tip, cell, row, col, snap, e) {
   if (!snap.heatmapStart) return;
-  const wrap = $("heatmap-wrap");
   const d = new Date((snap.heatmapStart + (col * 7 + row) * 86400) * 1000);
   const dateText = (d.getMonth() + 1) + "/" + d.getDate();
-  tip.textContent = dateText + " \u00b7 " + formatTokens(cell.tokens) + " Token \u00b7 " +
-                    formatMoney(cell.cost, snap.currency);
-  tip.style.display = "block";
-  if (wrap) {
-    const r = wrap.getBoundingClientRect();
-    let x = e.clientX - r.left + 10;
-    let y = e.clientY - r.top + 10;
-    if (x + tip.offsetWidth > r.width) x = e.clientX - r.left - tip.offsetWidth - 10;
-    if (y + tip.offsetHeight > r.height) y = e.clientY - r.top - tip.offsetHeight - 10;
-    tip.style.left = Math.max(0, x) + "px";
-    tip.style.top = Math.max(0, y) + "px";
-  }
+  const hv = $("heat-hover");
+  if (hv) hv.textContent = dateText + " \u00b7 " + formatTokens(cell.tokens) + " Token \u00b7 " +
+    formatMoney(cell.cost, snap.currency);
 }
 
 /* ---------------- 设置页 ---------------- */
@@ -570,6 +563,9 @@ async function init() {
 
 window.addEventListener("resize", () => {
   if (state.pieChart) state.pieChart.resize();
+  if (state.snapshot) {
+    try { renderHeatmap(state.snapshot); } catch (e) { reportError(e); }
+  }
 });
 
 if (window.runtime && window.go) {

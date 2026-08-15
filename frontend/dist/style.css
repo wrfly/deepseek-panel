@@ -167,3 +167,4 @@ body {
   padding: 8px 18px; font-size: 12px; font-weight: 600; cursor: pointer; font-family: inherit;
 }
 .primary-btn:hover { filter: brightness(1.1); }
+.hover-value { height: 16px; font-size: 10px; color: var(--accent); font-variant-numeric: tabular-nums; margin-top: 2px; }
