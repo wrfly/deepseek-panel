@@ -25,13 +25,16 @@ const (
 
 // Settings 应用设置，对应 Swift AppSettings（UserDefaults）。
 type Settings struct {
-	RefreshIntervalMinutes int     `json:"refreshIntervalMinutes"`
-	Period                 string  `json:"period"`
-	DisplayCurrency        string  `json:"displayCurrency"`
-	UseMockData            bool    `json:"useMockData"`
-	Budget                 float64 `json:"budget"`
-	HeatmapMetric          string  `json:"heatmapMetric"`      // "tokens" | "cost"
-	TrayDisplay            string  `json:"trayDisplay"`        // TrayDisplay 常量
+	RefreshIntervalMinutes int                `json:"refreshIntervalMinutes"`
+	Period                 string             `json:"period"`
+	DisplayCurrency        string             `json:"displayCurrency"`
+	UseMockData            bool               `json:"useMockData"`
+	Budget                 float64            `json:"budget"` // 旧版单值预算，仅用于迁移
+	DailyBudget            float64            `json:"dailyBudget"`
+	MonthlyBudget          float64            `json:"monthlyBudget"`
+	KeyBudgets             map[string]float64 `json:"keyBudgets"`
+	HeatmapMetric          string             `json:"heatmapMetric"` // "tokens" | "cost"
+	TrayDisplay            string             `json:"trayDisplay"`   // TrayDisplay 常量
 }
 
 // WithDefaults 返回带默认值的设置。
@@ -42,6 +45,9 @@ func WithDefaults() Settings {
 		DisplayCurrency:        "CNY",
 		UseMockData:            false,
 		Budget:                 0,
+		DailyBudget:            0,
+		MonthlyBudget:          0,
+		KeyBudgets:             map[string]float64{},
 		HeatmapMetric:          "tokens",
 		TrayDisplay:            string(TrayBoth),
 	}
@@ -60,8 +66,24 @@ func (s *Settings) Normalize() {
 	if s.DisplayCurrency != "USD" && s.DisplayCurrency != "CNY" {
 		s.DisplayCurrency = "CNY"
 	}
-	if s.Budget < 0 {
-		s.Budget = 0
+	// 旧版单值预算迁移为每日预算（仅迁移一次）
+	if s.Budget > 0 && s.DailyBudget == 0 && s.MonthlyBudget == 0 {
+		s.DailyBudget = s.Budget
+	}
+	s.Budget = 0
+	if s.DailyBudget < 0 {
+		s.DailyBudget = 0
+	}
+	if s.MonthlyBudget < 0 {
+		s.MonthlyBudget = 0
+	}
+	if s.KeyBudgets == nil {
+		s.KeyBudgets = map[string]float64{}
+	}
+	for k, v := range s.KeyBudgets {
+		if v < 0 {
+			delete(s.KeyBudgets, k)
+		}
 	}
 	if s.HeatmapMetric != "cost" {
 		s.HeatmapMetric = "tokens"

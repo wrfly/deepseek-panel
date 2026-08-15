@@ -64,15 +64,27 @@ type ReportJSON struct {
 
 // SettingsJSON 设置（前端 ↔ 后端）。
 type SettingsJSON struct {
-	RefreshIntervalMinutes int     `json:"refreshIntervalMinutes"`
-	Period                 string  `json:"period"`
-	DisplayCurrency        string  `json:"displayCurrency"`
-	UseMockData            bool    `json:"useMockData"`
-	Budget                 float64 `json:"budget"`
-	HeatmapMetric          string  `json:"heatmapMetric"`
-	TrayDisplay            string  `json:"trayDisplay"`
-	HasToken               bool    `json:"hasToken"`
-	LaunchAtLogin          bool    `json:"launchAtLogin"`
+	RefreshIntervalMinutes int                `json:"refreshIntervalMinutes"`
+	Period                 string             `json:"period"`
+	DisplayCurrency        string             `json:"displayCurrency"`
+	UseMockData            bool               `json:"useMockData"`
+	DailyBudget            float64            `json:"dailyBudget"`
+	MonthlyBudget          float64            `json:"monthlyBudget"`
+	KeyBudgets             map[string]float64 `json:"keyBudgets"`
+	HeatmapMetric          string             `json:"heatmapMetric"`
+	TrayDisplay            string             `json:"trayDisplay"`
+	HasToken               bool               `json:"hasToken"`
+	LaunchAtLogin          bool               `json:"launchAtLogin"`
+}
+
+// BudgetStatus 单条预算进度：每日 / 每月 / 各 API Key。
+type BudgetStatus struct {
+	Label string  `json:"label"`         // 展示名："今日" / "本月" / Key 名
+	Used  float64 `json:"used"`          // 当前消耗（显示币种）
+	Limit float64 `json:"limit"`         // 预算上限
+	Ratio float64 `json:"ratio"`         // Used / Limit
+	Over  bool    `json:"over"`          // 是否超支
+	Key   string  `json:"key,omitempty"` // 非空表示某 Key 的预算
 }
 
 // Snapshot 一次刷新后的完整快照。
@@ -87,8 +99,7 @@ type Snapshot struct {
 	IsLoading    bool                  `json:"isLoading"`
 	Heatmap      [][]panel.HeatmapCell `json:"heatmap"`
 	HeatmapStart int64                 `json:"heatmapStart"`
-	Budget       float64               `json:"budget"`
-	BudgetRatio  *float64              `json:"budgetRatio"`
+	Budgets      []BudgetStatus        `json:"budgets"`
 	Settings     SettingsJSON          `json:"settings"`
 	TrayTitle    string                `json:"trayTitle"`
 	TrayTooltip  string                `json:"trayTooltip"`
@@ -240,7 +251,6 @@ func (a *App) refresh() {
 		Currency:    settings.DisplayCurrency,
 		Period:      string(period),
 		PeriodTitle: period.Title(),
-		Budget:      settings.Budget,
 		Settings:    a.settingsJSON(settings),
 	}
 
@@ -296,10 +306,7 @@ func (a *App) refresh() {
 		}
 	}
 
-	if settings.Budget > 0 {
-		ratio := snap.Report.TotalCost / settings.Budget
-		snap.BudgetRatio = &ratio
-	}
+	snap.Budgets = a.budgetStatus(&snap, settings)
 	if snap.Summary == nil && snap.ErrorMessage == "" && snap.Report.TotalTokens == 0 {
 		snap.IsLoading = true
 	}
@@ -602,12 +609,96 @@ func (a *App) settingsJSON(settings panel.Settings) SettingsJSON {
 		Period:                 settings.Period,
 		DisplayCurrency:        settings.DisplayCurrency,
 		UseMockData:            settings.UseMockData,
-		Budget:                 settings.Budget,
+		DailyBudget:            settings.DailyBudget,
+		MonthlyBudget:          settings.MonthlyBudget,
+		KeyBudgets:             settings.KeyBudgets,
 		HeatmapMetric:          settings.HeatmapMetric,
 		TrayDisplay:            settings.TrayDisplay,
 		HasToken:               a.token() != "",
 		LaunchAtLogin:          a.autostart.IsEnabled(),
 	}
+}
+
+// ---- 预算管理 ----
+
+// budgetStatus 汇总预算状态：
+//   - 每日预算：今日 0 点起的消耗
+//   - 每月预算：本月 1 号起的消耗
+//   - 各 API Key 预算：当前查看周期的消耗（与 Key 行显示的金额一致）
+//
+// 消耗金额按显示币种统计。
+func (a *App) budgetStatus(snap *Snapshot, settings panel.Settings) []BudgetStatus {
+	currency := settings.DisplayCurrency
+	now := time.Now()
+	todayStart := startOfDay(now).Unix()
+	monthStart := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, now.Location()).Unix()
+	points := a.budgetPoints(snap)
+
+	var out []BudgetStatus
+	if settings.DailyBudget > 0 {
+		out = append(out, BudgetStatus{
+			Label: "今日",
+			Used:  sumCost(points, todayStart, now.Unix(), currency),
+			Limit: settings.DailyBudget,
+		})
+	}
+	if settings.MonthlyBudget > 0 {
+		out = append(out, BudgetStatus{
+			Label: "本月",
+			Used:  sumCost(points, monthStart, now.Unix(), currency),
+			Limit: settings.MonthlyBudget,
+		})
+	}
+	if len(settings.KeyBudgets) > 0 {
+		for _, key := range snap.Report.Keys {
+			limit, ok := settings.KeyBudgets[key.Name]
+			if !ok || limit <= 0 {
+				continue
+			}
+			out = append(out, BudgetStatus{
+				Label: key.Name,
+				Key:   key.Name,
+				Used:  key.Cost,
+				Limit: limit,
+			})
+		}
+	}
+	for i := range out {
+		if out[i].Limit > 0 {
+			out[i].Ratio = out[i].Used / out[i].Limit
+			out[i].Over = out[i].Ratio > 1
+		}
+	}
+	return out
+}
+
+// budgetPoints 预算统计的数据源：优先本地小时缓存（覆盖 168 天，能完整统计今日/本月），
+// 缓存为空（模拟数据/首次启动尚未回填）时回退到当前快照的趋势点。
+func (a *App) budgetPoints(snap *Snapshot) []panel.TrendPoint {
+	pts := a.trend.Points()
+	if len(pts) > 0 {
+		return pts
+	}
+	out := make([]panel.TrendPoint, 0, len(snap.Report.Trend))
+	for _, p := range snap.Report.Trend {
+		out = append(out, panel.TrendPoint{Time: p.Time, Tokens: p.Tokens, CostCNY: p.CostCNY, CostUSD: p.CostUSD})
+	}
+	return out
+}
+
+// sumCost 累加 [start, end) 区间内按显示币种统计的费用。
+func sumCost(points []panel.TrendPoint, start, end int64, currency string) float64 {
+	var total float64
+	for _, p := range points {
+		if p.Time >= start && p.Time < end {
+			if currency == "USD" {
+				total += p.CostUSD
+			} else {
+				total += p.CostCNY
+			}
+		}
+	}
+	return total
 }
 
 // ---- 托盘文案 ----
@@ -754,7 +845,9 @@ func (a *App) SaveSettings(s SettingsJSON) (SettingsJSON, error) {
 		Period:                 s.Period,
 		DisplayCurrency:        s.DisplayCurrency,
 		UseMockData:            s.UseMockData,
-		Budget:                 s.Budget,
+		DailyBudget:            s.DailyBudget,
+		MonthlyBudget:          s.MonthlyBudget,
+		KeyBudgets:             s.KeyBudgets,
 		HeatmapMetric:          s.HeatmapMetric,
 		TrayDisplay:            s.TrayDisplay,
 	}

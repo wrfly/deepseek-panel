@@ -69,12 +69,14 @@ body {
 .hero-cost .whale-sm { font-size: 15px; }
 .sub { font-size: 10px; color: var(--fg-dim); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
-/* 预算条 */
-.budget-row { display: flex; align-items: center; gap: 8px; margin: 6px 0 0; }
-.budget-bar { flex: 1; height: 6px; border-radius: 3px; background: var(--pill-bg); overflow: hidden; }
+/* 预算条（每日 / 每月 / 各 Key） */
+.budget-rows { display: flex; flex-direction: column; gap: 3px; margin-top: 6px; }
+.budget-row { display: flex; align-items: center; gap: 6px; }
+.budget-name { font-size: 9px; color: var(--fg-dim); width: 64px; flex: none; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.budget-bar { flex: 1; height: 5px; border-radius: 3px; background: var(--pill-bg); overflow: hidden; }
 .budget-fill { height: 100%; border-radius: 3px; background: var(--accent); }
 .budget-fill.over { background: var(--danger); }
-.budget-label { font-size: 9px; font-weight: 600; color: var(--fg-dim); width: 36px; text-align: right; font-variant-numeric: tabular-nums; }
+.budget-label { font-size: 9px; font-weight: 600; color: var(--fg-dim); width: 34px; flex: none; text-align: right; font-variant-numeric: tabular-nums; }
 .budget-label.over { color: var(--danger); }
 
 .hairline { height: 1px; background: var(--hairline); margin: 6px 0; }
@@ -147,6 +149,17 @@ body {
 
 /* 设置页 */
 .settings-form { display: flex; flex-direction: column; gap: 14px; }
+.key-budget-field { display: flex; align-items: center; gap: 8px; margin: 4px 0; }
+.field .key-budget-field label {
+  flex: 1; min-width: 0; margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  font-size: 11px; font-weight: 500; color: var(--fg-dim);
+}
+.key-budget-field input {
+  width: 130px; flex: none; background: var(--bg-panel); border: 1px solid var(--hairline); color: var(--fg);
+  border-radius: 6px; padding: 5px 8px; font-size: 11px; font-family: inherit; outline: none;
+  color-scheme: dark; accent-color: var(--accent);
+}
+.key-budget-field input:focus { border-color: var(--accent); }
 .field label { display: block; font-size: 11px; font-weight: 600; margin-bottom: 5px; }
 .field input[type="text"], .field input[type="password"], .field input[type="number"], .field select {
   width: 100%; background: var(--bg-panel); border: 1px solid var(--hairline); color: var(--fg);

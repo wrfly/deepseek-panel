@@ -164,9 +164,10 @@ function renderAll(snap) {
   });
 
   // 各区块独立渲染，单块异常不影响其余部分。
-  [renderHero, renderModels, renderRequests, renderTrend, renderKeys, renderFooter, renderHeatmap].forEach((fn) => {
+  [renderHero, renderBudget, renderModels, renderRequests, renderTrend, renderKeys, renderFooter, renderHeatmap].forEach((fn) => {
     try { fn(snap); } catch (e) { reportError(fn.name + ": " + e); }
   });
+  renderKeyBudgetInputs(snap);
 }
 
 function renderHero(snap) {
@@ -192,20 +193,28 @@ function renderHero(snap) {
     rightSub += "\u5df2\u6d88\u8d39 " + formatMoney(parseFloat(spent.amount), spent.currency);
   }
   $("hero-right-sub").textContent = rightSub;
+}
 
-  // 预算条
-  const budgetRow = $("budget-row");
-  if (snap.budget > 0) {
-    budgetRow.hidden = false;
-    const ratio = snap.budgetRatio || 0;
-    const pct = Math.round(ratio * 100);
-    const fill = $("budget-fill");
-    fill.style.width = Math.min(Math.max(ratio, 0), 1) * 100 + "%";
-    fill.classList.toggle("over", ratio > 1);
-    const label = $("budget-label");
-    label.textContent = pct + "%";
-    label.classList.toggle("over", ratio > 1);
-  } else { budgetRow.hidden = true; }
+// 预算进度条：每日 / 每月 / 各 API Key，每行一条
+function renderBudget(snap) {
+  const rows = $("budget-rows");
+  if (!rows) return;
+  rows.innerHTML = "";
+  (snap.budgets || []).forEach((b) => {
+    const row = el("div", "budget-row");
+    row.appendChild(el("span", "budget-name", b.label));
+    const bar = el("div", "budget-bar");
+    const fill = el("div", "budget-fill");
+    fill.style.width = Math.min(Math.max(b.ratio, 0), 1) * 100 + "%";
+    fill.classList.toggle("over", b.over);
+    bar.appendChild(fill);
+    row.appendChild(bar);
+    const label = el("span", "budget-label");
+    label.textContent = Math.round(b.ratio * 100) + "%";
+    label.classList.toggle("over", b.over);
+    row.appendChild(label);
+    rows.appendChild(row);
+  });
 }
 
 function renderModels(snap) {
@@ -543,7 +552,8 @@ function syncSettingsForm(snap) {
   $("set-interval").value = String(s.refreshIntervalMinutes);
   $("set-period").value = s.period;
   $("set-currency").value = s.displayCurrency;
-  $("set-budget").value = s.budget > 0 ? s.budget : "";
+  $("set-budget-daily").value = s.dailyBudget > 0 ? s.dailyBudget : "";
+  $("set-budget-monthly").value = s.monthlyBudget > 0 ? s.monthlyBudget : "";
   $("set-heatmap").value = s.heatmapMetric;
   $("set-tray").value = s.trayDisplay || "todayBoth";
   $("set-mock").checked = s.useMockData;
@@ -552,6 +562,41 @@ function syncSettingsForm(snap) {
     $("set-token").value = s.hasToken ? "\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022" : "";
     $("set-token").dataset.loaded = "1";
   }
+}
+
+// API Key 预算输入行：按快照中的 key 列表动态补齐（已存在的行不覆盖，避免刷新时打断输入）
+function renderKeyBudgetInputs(snap) {
+  const box = $("key-budget-fields");
+  if (!box) return;
+  const s = snap.settings || {};
+  const keyBudgets = s.keyBudgets || {};
+  const names = ((snap.report && snap.report.keys) || []).map((k) => k.name);
+  // 移除已不存在的 key 输入行
+  Array.prototype.slice.call(box.children).forEach((row) => {
+    const input = row.querySelector("input");
+    if (input && names.indexOf(input.dataset.key) < 0) row.remove();
+  });
+  // 补齐缺失的 key 输入行
+  names.forEach((name) => {
+    const inputs = box.querySelectorAll("input");
+    let found = null;
+    for (let i = 0; i < inputs.length; i++) {
+      if (inputs[i].dataset.key === name) { found = inputs[i]; break; }
+    }
+    if (found) return;
+    const row = el("div", "key-budget-field");
+    row.appendChild(el("label", "", name));
+    const input = el("input");
+    input.type = "number";
+    input.min = "0";
+    input.step = "0.01";
+    input.placeholder = "不设上限";
+    input.dataset.key = name;
+    const v = keyBudgets[name];
+    if (v > 0) input.value = String(v);
+    row.appendChild(input);
+    box.appendChild(row);
+  });
 }
 
 function showView(view) {
@@ -564,13 +609,21 @@ async function saveSettings() {
   const msg = $("save-msg");
   msg.textContent = "\u4fdd\u5b58\u4e2d\u2026";
   try {
-    const budget = parseFloat($("set-budget").value);
+    const budgetDaily = parseFloat($("set-budget-daily").value);
+    const budgetMonthly = parseFloat($("set-budget-monthly").value);
+    const keyBudgets = {};
+    document.querySelectorAll("#key-budget-fields input").forEach((inp) => {
+      const v = parseFloat(inp.value);
+      if (!isNaN(v) && v > 0) keyBudgets[inp.dataset.key] = v;
+    });
     const s = {
       refreshIntervalMinutes: parseInt($("set-interval").value, 10),
       period: $("set-period").value,
       displayCurrency: $("set-currency").value,
       useMockData: $("set-mock").checked,
-      budget: isNaN(budget) ? 0 : budget,
+      dailyBudget: isNaN(budgetDaily) ? 0 : budgetDaily,
+      monthlyBudget: isNaN(budgetMonthly) ? 0 : budgetMonthly,
+      keyBudgets: keyBudgets,
       heatmapMetric: $("set-heatmap").value,
       trayDisplay: $("set-tray").value,
       launchAtLogin: $("set-autostart").checked,
@@ -730,11 +783,17 @@ function mockSnapshot() {
     isLoading: false,
     heatmap: heatmap,
     heatmapStart: firstMonday,
-    budget: 100,
-    budgetRatio: 0.51,
+    budgets: [
+      { label: "今日", used: 3.52, limit: 10, ratio: 0.352, over: false },
+      { label: "本月", used: 62.1, limit: 200, ratio: 0.3105, over: false },
+      { label: "claude", key: "claude", used: 11.27, limit: 50, ratio: 0.2254, over: false },
+      { label: "codex", key: "codex", used: 31.23, limit: 40, ratio: 0.7808, over: false },
+    ],
     settings: {
       refreshIntervalMinutes: 5, period: "today", displayCurrency: "CNY",
-      useMockData: true, budget: 100, heatmapMetric: "tokens", trayDisplay: "todayBoth",
+      useMockData: true, dailyBudget: 10, monthlyBudget: 200,
+      keyBudgets: { claude: 50, codex: 40 },
+      heatmapMetric: "tokens", trayDisplay: "todayBoth",
       hasToken: true, launchAtLogin: false,
     },
     trayTitle: "\ud83d\udc0b \u00a53.14", trayTooltip: "DeepSeek 用量面板",
