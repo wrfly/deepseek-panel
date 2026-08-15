@@ -34,6 +34,16 @@ function cssVar(name, fallback) {
   }
 }
 
+// alpha 混合到深色背景，返回实色 rgb()（WebKitGTK canvas 对 opacity 渲染异常，需预混合）
+function withAlpha(hex, alpha) {
+  var r = parseInt(hex.slice(1, 3), 16);
+  var g = parseInt(hex.slice(3, 5), 16);
+  var b = parseInt(hex.slice(5, 7), 16);
+  var bgR = 24, bgG = 26, bgB = 32;
+  return 'rgb(' + Math.round(r * alpha + bgR * (1 - alpha)) + ',' +
+                 Math.round(g * alpha + bgG * (1 - alpha)) + ',' +
+                 Math.round(b * alpha + bgB * (1 - alpha)) + ')';
+}
 /* ---------------- 调色板（对应 Swift palette） ---------------- */
 const PALETTE = ["#4f8ef7", "#a78bfa", "#2dd4bf", "#f59e0b", "#f472b6", "#4ade80", "#818cf8", "#22d3ee"];
 const paletteColor = (i) => PALETTE[i % PALETTE.length];
@@ -78,7 +88,6 @@ function render(snap) {
 }
 
 function renderAll(snap) {
-
   // 设置页状态同步
   syncSettingsForm(snap);
 
@@ -98,13 +107,10 @@ function renderAll(snap) {
     b.classList.toggle("selected", b.dataset.period === snap.period);
   });
 
-  renderHero(snap);
-  renderModels(snap);
-  renderRequests(snap);
-  renderTrend(snap);
-  renderKeys(snap);
-  renderFooter(snap);
-  renderHeatmap(snap);
+  // 各区块独立渲染，单块异常不影响其余部分。
+  [renderHero, renderModels, renderRequests, renderTrend, renderKeys, renderFooter, renderHeatmap].forEach((fn) => {
+    try { fn(snap); } catch (e) { reportError(fn.name + ": " + e); }
+  });
 }
 
 function renderHero(snap) {
@@ -166,7 +172,7 @@ function renderModels(snap) {
   // 费用行（按费用降序）
   const costBox = $("model-cost-rows");
   costBox.innerHTML = "";
-  const costSorted = [...r.models].sort((a, b) => b.cost - a.cost || a.name.localeCompare(b.name, "zh"));
+  const costSorted = [...r.models].sort((a, b) => b.cost - a.cost || (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
   costSorted.forEach((m, i) => {
     const row = el("div", "model-row");
     row.appendChild(el("span", "dot", "")).style.background = paletteColor(i);
@@ -188,59 +194,55 @@ function renderTrend(snap) {
   $("pill-cost").classList.toggle("selected", isCost);
   $("pill-token").classList.toggle("selected", !isCost);
 
-  const chart = $("trend-chart");
-  if (!state.trendChart) state.trendChart = echarts.init(chart);
-  const accent = cssVar("--accent", "#4f8ef7");
-  const tooltipBg = cssVar("--tooltip-bg", "rgba(30, 33, 41, 0.97)");
-  const hairline = cssVar("--hairline", "#2a2e37");
-  const fgColor = cssVar("--fg", "#e8eaed");
   const points = r.trend || [];
   const first = points.length ? points[0].time : 0;
   const last = points.length ? points[points.length - 1].time : 0;
   const spanHours = (last - first) / 3600;
   const showHour = spanHours <= 24;
-
-  const values = points.map((p) => isCost ? (snap.currency === "USD" ? p.costUSD : p.costCNY) : p.tokens);
-  const maxV = Math.max(...values, 0);
-  const data = points.map((p, i) => [p.time, values[i]]);
   const hourFmt = (ts) => {
     const d = new Date(ts * 1000);
     return String(d.getHours()).padStart(2, "0") + ":00";
   };
 
-  state.trendChart.setOption({
-    animation: false,
-    grid: { left: 0, right: 0, top: 4, bottom: 0, containLabel: false },
-    xAxis: {
-      type: "category", data: points.map((p) => p.time), show: false,
-      axisLabel: { show: false }, splitLine: { show: false },
-    },
-    yAxis: { show: false, min: 0, max: maxV > 0 ? undefined : 1 },
-    tooltip: {
-      trigger: "axis",
-      confine: true,
-      backgroundColor: "transparent",
-      borderWidth: 0,
-      padding: 0,
-      extraCssText: "box-shadow:none;",
-      formatter: (params) => {
-        const p = params[0];
-        const pt = points[p.dataIndex];
+  // 纯 DOM 柱状图：WebKitGTK 的 canvas 颜色渲染不可靠，ECharts 渲染异常。
+  const values = points.map((p) => isCost ? (snap.currency === "USD" ? p.costUSD : p.costCNY) : p.tokens);
+  const maxV = Math.max.apply(null, values.concat([0]));
+  const box = $("trend-bars");
+  const empty = $("trend-empty");
+  box.innerHTML = "";
+
+  if (!points.length || maxV <= 0) {
+    empty.textContent = "\u6682\u65e0\u8d8b\u52bf\u6570\u636e";
+    empty.hidden = false;
+  } else {
+    empty.hidden = true;
+    const tooltip = makeHeatmapTooltip();
+    values.forEach((v, i) => {
+      const bar = el("div", "bar");
+      const h = v > 0 ? Math.max((v / maxV) * 100, 3) : 0;
+      bar.style.height = h + "%";
+      if (v <= 0) bar.style.opacity = "0.15";
+      bar.addEventListener("mouseenter", (e) => {
+        bar.classList.add("hover");
+        const pt = points[i];
         const time = showHour ? hourFmt(pt.time) : fmtTime(pt.time, true);
-        const val = isCost ? formatMoney(values[p.dataIndex], snap.currency)
-                           : formatTokens(values[p.dataIndex]) + " Token";
-        return '<div style="background:' + tooltipBg + ';border:1px solid ' + hairline + ';border-radius:4px;padding:3px 8px;font-size:10px;color:' + fgColor + ';font-variant-numeric:tabular-nums;">' +
-               time + "&nbsp;&nbsp;" + val + "</div>";
-      },
-    },
-    series: [{
-      type: "bar",
-      data: data.map(([t, v]) => [t, v > 0 ? v : null]),
-      barWidth: "55%",
-      itemStyle: { color: accent, borderRadius: [2, 2, 0, 0], opacity: 0.55 },
-      emphasis: { itemStyle: { color: accent, opacity: 1 } },
-    }],
-  }, true);
+        const val = isCost ? formatMoney(values[i], snap.currency) : formatTokens(values[i]) + " Token";
+        tooltip.textContent = time + "  " + val;
+        tooltip.style.display = "block";
+        const r2 = bar.getBoundingClientRect();
+        let x = r2.left + r2.width / 2 - tooltip.offsetWidth / 2;
+        x = Math.max(6, Math.min(x, window.innerWidth - tooltip.offsetWidth - 6));
+        tooltip.style.left = x + "px";
+        tooltip.style.top = (r2.top - tooltip.offsetHeight - 4) + "px";
+      });
+      bar.addEventListener("mousemove", () => {});
+      bar.addEventListener("mouseleave", () => {
+        bar.classList.remove("hover");
+        tooltip.style.display = "none";
+      });
+      box.appendChild(bar);
+    });
+  }
 
   // 轴标签
   if (points.length > 1 && showHour) {
@@ -399,12 +401,15 @@ function renderHeatmap(snap) {
   } else { $("heatmap-start").textContent = ""; }
 }
 
+let sharedTooltip = null;
 function makeHeatmapTooltip() {
+  if (sharedTooltip) return sharedTooltip;
   const tip = el("div", "heatmap-tooltip");
   tip.style.cssText = "position:fixed;pointer-events:none;background:" + cssVar("--tooltip-bg", "rgba(30, 33, 41, 0.97)") + ";" +
     "border:1px solid " + cssVar("--hairline", "#2a2e37") + ";border-radius:4px;padding:3px 8px;font-size:10px;" +
     "color:" + cssVar("--fg", "#e8eaed") + ";z-index:99;white-space:nowrap;font-variant-numeric:tabular-nums;display:none;";
   document.body.appendChild(tip);
+  sharedTooltip = tip;
   return tip;
 }
 
@@ -513,7 +518,6 @@ async function init() {
 }
 
 window.addEventListener("resize", () => {
-  if (state.trendChart) state.trendChart.resize();
   if (state.pieChart) state.pieChart.resize();
 });
 
@@ -649,7 +653,7 @@ window.__selftest = function () {
     heatmapColHeight: col ? col.offsetHeight : 0,
     heatmapIsHorizontal: !!(grid && col && grid.offsetWidth > col.offsetHeight && cols.length === 24),
     bodyHeight: document.body ? document.body.scrollHeight : 0,
-    trendCanvas: !!state.trendChart,
+    trendBars: document.querySelectorAll("#trend-bars .bar").length,
     pieCanvas: !!state.pieChart,
     heroTokens: $("hero-tokens") ? $("hero-tokens").textContent : "",
     heroCost: $("hero-cost") ? $("hero-cost").textContent : "",

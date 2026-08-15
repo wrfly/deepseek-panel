@@ -102,7 +102,11 @@ body {
   background: var(--pill-bg); color: var(--fg-dim); cursor: pointer; font-family: inherit;
 }
 .pill.selected { background: var(--accent); color: #fff; }
-.trend-chart { height: 50px; margin-top: 0; }
+.trend-chart { height: 50px; margin-top: 0; position: relative; }
+.trend-chart .bars { display: flex; align-items: flex-end; gap: 2px; height: 100%; }
+.trend-chart .bar { flex: 1; background: var(--accent); border-radius: 2px 2px 0 0; opacity: 0.55; min-width: 2px; cursor: default; }
+.trend-chart .bar:hover, .trend-chart .bar.hover { opacity: 1; }
+.trend-empty { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 10px; color: var(--fg-faint); }
 .axis-row { display: flex; justify-content: space-between; margin-top: 4px; }
 .axis-label { font-size: 9px; color: var(--fg-faint); }
 
