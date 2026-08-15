@@ -255,7 +255,7 @@ function renderTrend(snap) {
       const fraction = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
       const index = Math.min(points.length - 1, Math.floor(fraction * points.length));
       showTip(index, e.clientX, e.clientY);
-      reportError("trend-tip2 disp=" + tooltip.style.display + " text=" + tooltip.textContent);
+
     });
     box.addEventListener("mouseleave", clearTip);
 
@@ -367,8 +367,6 @@ function renderHeatmap(snap) {
 
   const grid = $("heatmap-grid");
   grid.innerHTML = "";
-  const hv0 = $("heat-hover");
-  if (hv0) hv0.textContent = "";
   const hv0 = $("heat-hover");
   if (hv0) hv0.textContent = "";
   // 计算格子尺寸铺满可用宽度（不用 aspect-ratio，WebKitGTK 下会高度塌陷）。
