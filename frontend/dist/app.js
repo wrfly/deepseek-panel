@@ -24,6 +24,55 @@ function fmtTime(ts, withDate) {
   return hh + ":" + mm;
 }
 
+// 趋势图悬停：文档级 mousemove 监听（box 级事件在 WebKitGTK 下不可靠，
+// 曾出现只触发一次、鼠标移动不更新文本条的问题）。
+const trendHover = {
+  active: false,
+  box: null,
+  points: null,
+  values: null,
+  isCost: false,
+  showHour: true,
+  fmt: null,
+  currency: "CNY",
+  bars: [],
+  hoverIndex: -1,
+};
+function bindTrendHover() {
+  document.addEventListener("mousemove", (e) => {
+    const st = trendHover;
+    if (!st.box || !st.points || !st.points.length) return;
+    const rect = st.box.getBoundingClientRect();
+    if (!rect.width) return;
+    const inside = e.clientX >= rect.left && e.clientX <= rect.right &&
+                   e.clientY >= rect.top && e.clientY <= rect.bottom;
+    if (!inside) {
+      if (st.active) {
+        st.active = false;
+        if (st.hoverIndex >= 0 && st.bars[st.hoverIndex]) st.bars[st.hoverIndex].classList.remove("hover");
+        st.hoverIndex = -1;
+        const hv = $("trend-hover");
+        if (hv) hv.textContent = "";
+      }
+      return;
+    }
+    st.active = true;
+    const fraction = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+    const index = Math.min(st.points.length - 1, Math.floor(fraction * st.points.length));
+    if (index !== st.hoverIndex) {
+      if (st.hoverIndex >= 0 && st.bars[st.hoverIndex]) st.bars[st.hoverIndex].classList.remove("hover");
+      st.hoverIndex = index;
+      if (st.bars[index]) st.bars[index].classList.add("hover");
+    }
+    const pt = st.points[index];
+    const time = st.showHour ? st.fmt(pt.time) : fmtTime(pt.time, true);
+    const val = st.isCost ? formatMoney(st.values[index], st.currency)
+                         : formatTokens(st.values[index]) + " Token";
+    const hv = $("trend-hover");
+    if (hv) hv.textContent = time + "  " + val;
+  });
+}
+bindTrendHover();
 /* ---------------- CSS 变量取值（ECharts canvas 不认 var()，需取具体值） ---------------- */
 function cssVar(name, fallback) {
   try {
@@ -216,7 +265,6 @@ function renderTrend(snap) {
     empty.hidden = false;
   } else {
     empty.hidden = true;
-    const tooltip = getTrendTip();
     const bars = [];
     let hoverIndex = -1;
     values.forEach((v, i) => {
@@ -227,6 +275,21 @@ function renderTrend(snap) {
       bars.push(bar);
       box.appendChild(bar);
     });
+
+    // 填充浮停状态（文档级 mousemove 统一处理）
+    trendHover.box = box;
+    trendHover.points = points;
+    trendHover.values = values;
+    trendHover.isCost = isCost;
+    trendHover.showHour = showHour;
+    trendHover.fmt = hourFmt;
+    trendHover.currency = snap.currency || "CNY";
+    trendHover.bars = bars;
+    trendHover.hoverIndex = -1;
+    trendHover.active = false;
+    const hv = $("trend-hover");
+    if (hv) hv.textContent = "";
+  }
 
     // 整个图表区域响应鼠标移动，自动定位最近柱子并展示具体数字
     // （柱子太矮时直接悬停柱子几乎不可能命中）。
@@ -255,7 +318,6 @@ function renderTrend(snap) {
       const fraction = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
       const index = Math.min(points.length - 1, Math.floor(fraction * points.length));
       showTip(index, e.clientX, e.clientY);
-
     });
     box.addEventListener("mouseleave", clearTip);
 

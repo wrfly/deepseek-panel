@@ -153,14 +153,16 @@ func (a *App) Startup(ctx context.Context) {
 	go a.refresh()
 	go a.loop()
 
-	// 调试：打印窗口状态
+	// 调试：定期打印窗口状态（窗口位置可能被用户/合成器改变）
 	go func() {
-		time.Sleep(3 * time.Second)
-		if os.Getenv("DEEPSEEK_PANEL_DEBUG") == "1" {
-			x, y := wailsruntime.WindowGetPosition(ctx)
-			w, h := wailsruntime.WindowGetSize(ctx)
-			fmt.Fprintf(os.Stderr, "DEBUG window: pos=(%d,%d) size=(%dx%d) minimized=%v\n",
-				x, y, w, h, wailsruntime.WindowIsMinimised(ctx))
+		for {
+			if os.Getenv("DEEPSEEK_PANEL_DEBUG") == "1" {
+				x, y := wailsruntime.WindowGetPosition(ctx)
+				w, h := wailsruntime.WindowGetSize(ctx)
+				fmt.Fprintf(os.Stderr, "DEBUG window: pos=(%d,%d) size=(%dx%d) minimized=%v\n",
+					x, y, w, h, wailsruntime.WindowIsMinimised(ctx))
+			}
+			time.Sleep(5 * time.Second)
 		}
 	}()
 }
