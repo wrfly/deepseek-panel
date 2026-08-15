@@ -247,14 +247,36 @@ function renderTrend(snap) {
   const first = points.length ? points[0].time : 0;
   const last = points.length ? points[points.length - 1].time : 0;
   const spanHours = (last - first) / 3600;
-  const showHour = spanHours <= 24;
+  // 跨度 > 24 小时（7天/本月）时按天聚合，避免数百根细柱几乎不可见。
+  const byDay = spanHours > 24;
+  const dayKey = (ts) => {
+    const d = new Date(ts * 1000);
+    return d.getFullYear() + "-" + (d.getMonth() + 1) + "-" + d.getDate();
+  };
+  let dispPoints = points;
+  if (byDay && points.length) {
+    const map = {};
+    const order = [];
+    points.forEach((p) => {
+      const k = dayKey(p.time);
+      if (!map[k]) { map[k] = { time: p.time, tokens: 0, costCNY: 0, costUSD: 0 }; order.push(k); }
+      map[k].tokens += p.tokens;
+      map[k].costCNY += p.costCNY;
+      map[k].costUSD += p.costUSD;
+    });
+    dispPoints = order.map((k) => map[k]);
+  }
+  const dayFmt = (ts) => {
+    const d = new Date(ts * 1000);
+    return (d.getMonth() + 1) + "/" + d.getDate();
+  };
   const hourFmt = (ts) => {
     const d = new Date(ts * 1000);
     return String(d.getHours()).padStart(2, "0") + ":00";
   };
 
   // 纯 DOM 柱状图：WebKitGTK 的 canvas 颜色渲染不可靠，ECharts 渲染异常。
-  const values = points.map((p) => isCost ? (snap.currency === "USD" ? p.costUSD : p.costCNY) : p.tokens);
+  const values = dispPoints.map((p) => isCost ? (snap.currency === "USD" ? p.costUSD : p.costCNY) : p.tokens);
   const maxV = Math.max.apply(null, values.concat([0]));
   const box = $("trend-bars");
   const empty = $("trend-empty");
@@ -266,7 +288,6 @@ function renderTrend(snap) {
   } else {
     empty.hidden = true;
     const bars = [];
-    let hoverIndex = -1;
     values.forEach((v, i) => {
       const bar = el("div", "bar");
       const h = v > 0 ? Math.max((v / maxV) * 100, 3) : 0;
@@ -278,11 +299,11 @@ function renderTrend(snap) {
 
     // 填充浮停状态（文档级 mousemove 统一处理）
     trendHover.box = box;
-    trendHover.points = points;
+    trendHover.points = dispPoints;
     trendHover.values = values;
     trendHover.isCost = isCost;
-    trendHover.showHour = showHour;
-    trendHover.fmt = hourFmt;
+    trendHover.showHour = !byDay;
+    trendHover.fmt = byDay ? dayFmt : hourFmt;
     trendHover.currency = snap.currency || "CNY";
     trendHover.bars = bars;
     trendHover.hoverIndex = -1;
@@ -298,15 +319,15 @@ function renderTrend(snap) {
     axisRow.innerHTML = "";
     // 柱子足够宽（点数少，如今天）时每根柱子都显示小时数字；
     // 点数多（跨天）时按间隔显示日期时间。
-    const barW = box.clientWidth / Math.max(points.length, 1);
-    const showEvery = barW >= 16 ? 1 : Math.max(Math.floor(points.length / 4), 1);
+    const barW = box.clientWidth / Math.max(dispPoints.length, 1);
+    const showEvery = barW >= 16 ? 1 : Math.max(Math.floor(dispPoints.length / 4), 1);
     const hourNum = (ts) => String(new Date(ts * 1000).getHours());
-    points.forEach((p, i) => {
-      const isLast = i === points.length - 1;
+    dispPoints.forEach((p, i) => {
+      const isLast = i === dispPoints.length - 1;
       const show = isLast || (i % showEvery === 0);
       let label = "";
       if (isLast) label = "现在";
-      else if (show) label = showHour ? hourNum(p.time) : fmtTime(p.time, true);
+      else if (show) label = byDay ? dayFmt(p.time) : hourNum(p.time);
       axisRow.appendChild(el("span", "axis-tick", label));
     });
   }
