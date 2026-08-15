@@ -40,7 +40,8 @@ body {
 .period-tabs { display: flex; gap: 2px; }
 .period-tabs button {
   background: none; border: none; color: var(--fg-dim); font-size: 10px;
-  cursor: pointer; padding: 2px 3px; font-family: inherit; width: 34px;
+  cursor: pointer; padding: 2px 4px; font-family: inherit;
+  min-width: 30px; white-space: nowrap;
 }
 .period-tabs button.selected { color: var(--fg); text-decoration: underline; }
 
