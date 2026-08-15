@@ -261,16 +261,17 @@ function renderTrend(snap) {
 
   }
 
-  // 轴标签
-  if (points.length > 1 && showHour) {
+  // 轴标签：与每根柱子等宽对齐（相同 flex 布局，不再集中在左侧）
+  const axisRow = $("axis-row");
+  if (axisRow) {
+    axisRow.innerHTML = "";
     const step = Math.max(Math.floor(points.length / 4), 1);
-    const labels = [];
-    for (let i = 0; i < points.length; i += step) labels.push(hourFmt(points[i].time));
-    $("axis-start").textContent = labels.join(" ");
-  } else if (points.length) {
-    $("axis-start").textContent = spanHours <= 48 ? fmtTime(first) : fmtTime(first, true);
-  } else {
-    $("axis-start").textContent = "";
+    points.forEach((p, i) => {
+      const isLast = i === points.length - 1;
+      const show = isLast || (i % step === 0);
+      const label = isLast ? "现在" : (show ? (showHour ? hourFmt(p.time) : fmtTime(p.time, true)) : "");
+      axisRow.appendChild(el("span", "axis-tick", label));
+    });
   }
 }
 
