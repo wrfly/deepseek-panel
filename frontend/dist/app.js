@@ -291,37 +291,6 @@ function renderTrend(snap) {
     if (hv) hv.textContent = "";
   }
 
-    // 整个图表区域响应鼠标移动，自动定位最近柱子并展示具体数字
-    // （柱子太矮时直接悬停柱子几乎不可能命中）。
-    const showTip = (i, clientX, clientY) => {
-      if (i !== hoverIndex) {
-        if (hoverIndex >= 0) bars[hoverIndex].classList.remove("hover");
-        hoverIndex = i;
-        bars[i].classList.add("hover");
-      }
-      const pt = points[i];
-      const time = showHour ? hourFmt(pt.time) : fmtTime(pt.time, true);
-      const val = isCost ? formatMoney(values[i], snap.currency) : formatTokens(values[i]) + " Token";
-      // 可靠方案：更新图表下方的文档流文本条（浮动层在 WebKitGTK 下不绘制）。
-      const hv = $("trend-hover");
-      if (hv) hv.textContent = time + "  " + val;
-    };
-    const clearTip = () => {
-      if (hoverIndex >= 0) bars[hoverIndex].classList.remove("hover");
-      hoverIndex = -1;
-      const hv = $("trend-hover");
-      if (hv) hv.textContent = "";
-    };
-    box.addEventListener("mousemove", (e) => {
-      const rect = box.getBoundingClientRect();
-      if (!rect.width) return;
-      const fraction = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
-      const index = Math.min(points.length - 1, Math.floor(fraction * points.length));
-      showTip(index, e.clientX, e.clientY);
-    });
-    box.addEventListener("mouseleave", clearTip);
-
-  }
 
   // 轴标签：与每根柱子等宽对齐（相同 flex 布局，不再集中在左侧）
   const axisRow = $("axis-row");
