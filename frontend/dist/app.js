@@ -195,12 +195,6 @@ function renderHero(snap) {
   const wallets = (snap.summary && snap.summary.normal_wallets) || [];
   const wallet = wallets.find((w) => w.currency === snap.currency) || wallets[0];
   if (wallet) rightSub += "\u4f59\u989d " + formatMoney(parseFloat(wallet.balance), wallet.currency);
-  const totals = (snap.summary && snap.summary.total_costs) || [];
-  const spent = totals.find((t) => t.currency === snap.currency);
-  if (spent) {
-    if (rightSub) rightSub += " \u00b7 ";
-    rightSub += "\u5df2\u6d88\u8d39 " + formatMoney(parseFloat(spent.amount), spent.currency);
-  }
   $("hero-right-sub").textContent = rightSub;
 }
 
