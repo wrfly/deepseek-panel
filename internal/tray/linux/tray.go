@@ -33,7 +33,7 @@ import (
 // IconName 托盘图标在图标主题中的名称。
 // 注意：GNOME AppIndicator 扩展会在 shell 进程内按图标名缓存图标，
 // 更换图标图片后需要同时改名（版本后缀），否则旧图标不会刷新。
-const IconName = "deepseek-panel-official"
+const IconName = "deepseek-panel-transparent"
 
 // InstallIcon 把托盘图标安装到用户图标主题（~/.local/share/icons/hicolor），
 // 返回供 AppIndicator 使用的图标名；失败时返回空串（AppIndicator 仍可显示标题）。
@@ -50,16 +50,17 @@ func InstallIcon(configDir string) string {
 	_ = os.WriteFile(filepath.Join(cfgDir, "whale.png"), icon.PNG, 0o644)
 
 	// hicolor 主题是 GTK 的默认回退主题，无需 index.theme 也能被找到。
+	// 安装透明图标：AppIndicator 必须有图标名，但视觉上由标题里的 🐋 emoji 充当。
 	installed := false
 	sizes := []struct {
 		dir  string
 		data []byte
 	}{
-		{"22x22", icon.PNG22},
-		{"24x24", icon.PNG24},
-		{"32x32", icon.PNG32},
-		{"48x48", icon.PNG48},
-		{"64x64", icon.PNG64},
+		{"22x22", icon.Transparent22},
+		{"24x24", icon.Transparent24},
+		{"32x32", icon.Transparent32},
+		{"48x48", icon.Transparent48},
+		{"64x64", icon.Transparent64},
 	}
 	for _, s := range sizes {
 		dir := filepath.Join(home, ".local", "share", "icons", "hicolor", s.dir, "status")

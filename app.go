@@ -865,12 +865,8 @@ func (a *App) trayText(snap *Snapshot, settings panel.Settings) (string, string)
 	todayTokens, todayCost := todayTotals(snap, currency)
 	hasToday := todayTokens > 0 || todayCost > 0
 
-	// macOS 菜单栏没有图标，用 🐋 emoji 充当图标；
-	// Linux 托盘本身有鲸鱼 png 图标，标题不再重复 emoji（避免“两个鲸鱼”）。
-	icon := ""
-	if runtime.GOOS == "darwin" {
-		icon = "🐋 "
-	}
+	// 托盘图标统一用 🐋 emoji 充当（Linux 的 AppIndicator 图标是透明的占位图）。
+	icon := "🐋 "
 	title := icon
 	switch panel.TrayDisplay(settings.TrayDisplay) {
 	case panel.TrayCost:
