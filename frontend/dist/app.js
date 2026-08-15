@@ -705,14 +705,13 @@ window.__selftest = function () {
     keysMeta: $("keys-meta") ? $("keys-meta").textContent : "",
     footerTotal: $("footer-total") ? $("footer-total").textContent : "",
     viewPanelHidden: $("view-panel") ? $("view-panel").hidden : true,
-    hoverTooltip: (function () {
+    hoverText: (function () {
       const box = $("trend-bars");
       if (!box || !box.children.length) return "no-bars";
       const rect = box.getBoundingClientRect();
       box.dispatchEvent(new MouseEvent("mousemove", { clientX: rect.left + rect.width * 0.3, clientY: rect.top + 10 }));
-      const tip = heatTip || trendTip;
-      if (!tip || tip.style.display === "none") return "hidden";
-      return tip.textContent;
+      const hv = $("trend-hover");
+      return hv ? hv.textContent : "no-element";
     })(),
   };
 };
