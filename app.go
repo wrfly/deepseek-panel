@@ -865,38 +865,44 @@ func (a *App) trayText(snap *Snapshot, settings panel.Settings) (string, string)
 	todayTokens, todayCost := todayTotals(snap, currency)
 	hasToday := todayTokens > 0 || todayCost > 0
 
-	title := "🐋"
+	// macOS 菜单栏没有图标，用 🐋 emoji 充当图标；
+	// Linux 托盘本身有鲸鱼 png 图标，标题不再重复 emoji（避免“两个鲸鱼”）。
+	icon := ""
+	if runtime.GOOS == "darwin" {
+		icon = "🐋 "
+	}
+	title := icon
 	switch panel.TrayDisplay(settings.TrayDisplay) {
 	case panel.TrayCost:
 		if hasToday {
-			title = "🐋 今日 " + panel.FormatMoney(todayCost, currency)
+			title = icon + "今日 " + panel.FormatMoney(todayCost, currency)
 		} else if snap.Summary != nil {
 			if wallet := pickWallet(snap.Summary, settings.DisplayCurrency); wallet != nil {
-				title = "🐋 " + panel.FormatMoney(panel.ParseDecimal(wallet.Balance), wallet.Currency)
+				title = icon + panel.FormatMoney(panel.ParseDecimal(wallet.Balance), wallet.Currency)
 			}
 		}
 	case panel.TrayTokens:
 		if hasToday {
-			title = "🐋 今日 " + panel.FormatTokens(todayTokens)
+			title = icon + "今日 " + panel.FormatTokens(todayTokens)
 		} else if snap.Summary != nil {
 			if wallet := pickWallet(snap.Summary, settings.DisplayCurrency); wallet != nil {
-				title = "🐋 " + panel.FormatMoney(panel.ParseDecimal(wallet.Balance), wallet.Currency)
+				title = icon + panel.FormatMoney(panel.ParseDecimal(wallet.Balance), wallet.Currency)
 			}
 		}
 	case panel.TrayBalance:
 		if snap.Summary != nil {
 			if wallet := pickWallet(snap.Summary, settings.DisplayCurrency); wallet != nil {
-				title = "🐋 " + panel.FormatMoney(panel.ParseDecimal(wallet.Balance), wallet.Currency)
+				title = icon + panel.FormatMoney(panel.ParseDecimal(wallet.Balance), wallet.Currency)
 			}
 		}
 	case panel.TrayNone:
-		title = "🐋"
+		title = icon
 	default: // TrayBoth
 		if hasToday {
-			title = "🐋 今日 " + panel.FormatMoney(todayCost, currency) + " · " + panel.FormatTokens(todayTokens)
+			title = icon + "今日 " + panel.FormatMoney(todayCost, currency) + " · " + panel.FormatTokens(todayTokens)
 		} else if snap.Summary != nil {
 			if wallet := pickWallet(snap.Summary, settings.DisplayCurrency); wallet != nil {
-				title = "🐋 " + panel.FormatMoney(panel.ParseDecimal(wallet.Balance), wallet.Currency)
+				title = icon + panel.FormatMoney(panel.ParseDecimal(wallet.Balance), wallet.Currency)
 			}
 		}
 	}
