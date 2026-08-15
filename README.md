@@ -80,9 +80,9 @@ cp -r build/DeepSeekPanel.app /Applications/
 
 ## 目录结构
 
-- `main.go` / `app.go`：Wails 应用入口、绑定方法与刷新循环（对应 Swift 的 AppDelegate/StatusBarController）
-- `internal/deepseek/`：平台 API 客户端与模型（对应 DeepSeekClient.swift / Models.swift）
-- `internal/panel/`：统计周期、聚合、趋势存储、设置、Token 存储、模拟数据、热力图、开机自启（对应 Usage.swift / TrendStore.swift / MockData.swift 等）
+- `main.go` / `app.go`：Wails 应用入口、绑定方法与刷新循环
+- `internal/deepseek/`：平台 API 客户端与模型
+- `internal/panel/`：统计周期、聚合、趋势存储、设置、Token 存储、模拟数据、热力图、开机自启
 - `internal/tray/`：跨平台托盘（macOS 原生 NSStatusItem；Linux AppIndicator，均挂在 Wails 事件循环上）
 - `frontend/dist/`：Web 前端（面板 + 设置，ECharts 图表），随二进制内嵌，无构建步骤
 - `scripts/`：build-mac.sh（macOS 打包）、setup-linux-deps.sh（无 root 装依赖）、gen_icon.go（托盘图标）
