@@ -31,7 +31,9 @@ import (
 )
 
 // IconName 托盘图标在图标主题中的名称。
-const IconName = "deepseek-panel"
+// 注意：GNOME AppIndicator 扩展会在 shell 进程内按图标名缓存图标，
+// 更换图标图片后需要同时改名（版本后缀），否则旧图标不会刷新。
+const IconName = "deepseek-panel-official"
 
 // InstallIcon 把托盘图标安装到用户图标主题（~/.local/share/icons/hicolor），
 // 返回供 AppIndicator 使用的图标名；失败时返回空串（AppIndicator 仍可显示标题）。
