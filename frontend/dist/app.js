@@ -152,6 +152,13 @@ function renderAll(snap) {
   } else { banner.hidden = true; }
 
   // 周期标签
+  const moreLabels = { thisMonth: "本月", last30d: "30天", lastMonth: "上个月" };
+  const more = $("period-more");
+  if (more) {
+    const cur = snap.period;
+    more.dataset.period = (cur === "last30d" || cur === "lastMonth") ? cur : "thisMonth";
+    more.textContent = moreLabels[more.dataset.period];
+  }
   document.querySelectorAll("#period-tabs button").forEach((b) => {
     b.classList.toggle("selected", b.dataset.period === snap.period);
   });
@@ -588,9 +595,19 @@ async function saveSettings() {
 function bindUI() {
   // 周期标签
   document.querySelectorAll("#period-tabs button").forEach((b) => {
+    if (b.id === "period-more") return;
     b.addEventListener("click", () => {
       window.go.main.App.SetPeriod(b.dataset.period);
     });
+  });
+
+  // 本月 → 30天 → 上个月 → 本月 循环切换
+  $("period-more").addEventListener("click", () => {
+    const order = ["thisMonth", "last30d", "lastMonth"];
+    const cur = $("period-more").dataset.period;
+    const idx = order.indexOf(cur);
+    const next = order[(idx + 1) % order.length];
+    window.go.main.App.SetPeriod(next);
   });
   $("btn-refresh").addEventListener("click", () => window.go.main.App.RefreshNow());
   $("btn-settings").addEventListener("click", () => showView("settings"));
