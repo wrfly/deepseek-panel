@@ -206,10 +206,10 @@ function renderModels(snap) {
   // Token 行
   const tokenBox = $("model-token-rows");
   tokenBox.innerHTML = "";
-  if (!r.models.length) { tokenBox.appendChild(el("div", "empty-tip", "\u6682\u65e0\u6570\u636e")); }
+  if (!(r.models || []).length) { tokenBox.appendChild(el("div", "empty-tip", "\u6682\u65e0\u6570\u636e")); }
   else {
-    const total = r.models.reduce((s, m) => s + m.tokens, 0);
-    r.models.forEach((m, i) => {
+    const total = (r.models || []).reduce((s, m) => s + m.tokens, 0);
+    (r.models || []).forEach((m, i) => {
       const row = el("div", "model-row");
       row.appendChild(el("span", "dot", "")).style.background = paletteColor(i);
       row.appendChild(el("span", "name", m.name));
@@ -221,7 +221,7 @@ function renderModels(snap) {
   // 费用行（按费用降序）
   const costBox = $("model-cost-rows");
   costBox.innerHTML = "";
-  const costSorted = [...r.models].sort((a, b) => b.cost - a.cost || (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
+  const costSorted = [...(r.models || [])].sort((a, b) => b.cost - a.cost || (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
   costSorted.forEach((m, i) => {
     const row = el("div", "model-row");
     row.appendChild(el("span", "dot", "")).style.background = paletteColor(i);
@@ -233,7 +233,7 @@ function renderModels(snap) {
 
 function renderRequests(snap) {
   const r = snap.report || {};
-  $("requests-value").textContent = formatTokens(r.totalRequests) + " \u00b7 " + r.keys.length + " \u4e2a Key";
+  $("requests-value").textContent = formatTokens(r.totalRequests) + " \u00b7 " + (r.keys || []).length + " \u4e2a Key";
 }
 
 function renderTrend(snap) {
@@ -339,14 +339,14 @@ function renderKeys(snap) {
   box.innerHTML = "";
 
   // meta
-  let meta = r.keys.length + " \u4e2a Key";
+  let meta = (r.keys || []).length + " \u4e2a Key";
   if (snap.lastUpdated) meta += " \u00b7 " + fmtTime(snap.lastUpdated) + " \u66f4\u65b0";
   $("keys-meta").textContent = meta;
 
-  if (!r.keys.length) {
+  if (!(r.keys || []).length) {
     box.appendChild(el("div", "empty-tip", "\u8be5\u5468\u671f\u6682\u65e0\u7528\u91cf\u6570\u636e"));
   } else {
-    r.keys.forEach((key, i) => {
+    (r.keys || []).forEach((key, i) => {
       const row = el("div", "key-row");
       row.appendChild(el("span", "dot", "")).style.background = paletteColor(i);
       const main = el("div", "key-main");
@@ -368,9 +368,9 @@ function renderKeys(snap) {
 
   // 饼图
   const pieBox = $("key-pie");
-  const costs = r.keys.map((k) => k.cost);
+  const costs = (r.keys || []).map((k) => k.cost);
   const useCosts = costs.reduce((s, v) => s + v, 0) > 0;
-  const values = r.keys.map((k) => useCosts ? k.cost : k.totalTokens);
+  const values = (r.keys || []).map((k) => useCosts ? k.cost : k.totalTokens);
   const total = values.reduce((s, v) => s + v, 0);
   if (!state.pieChart) state.pieChart = echarts.init(pieBox);
   if (total <= 0) {
@@ -397,7 +397,7 @@ function renderKeys(snap) {
     series: [{
       type: "pie",
       radius: ["58%", "78%"],
-      data: r.keys.map((k, i) => ({ name: k.name, value: values[i], itemStyle: { color: paletteColor(i) } })),
+      data: (r.keys || []).map((k, i) => ({ name: k.name, value: values[i], itemStyle: { color: paletteColor(i) } })),
       label: { show: false }, labelLine: { show: false },
       emphasis: { scale: false, itemStyle: { shadowBlur: 4, shadowColor: "rgba(0,0,0,0.3)" } },
     }],
