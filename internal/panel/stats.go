@@ -11,11 +11,13 @@ const (
 	PeriodToday     StatsPeriod = "today"
 	PeriodLast24h   StatsPeriod = "last24h"
 	PeriodLast7d    StatsPeriod = "last7d"
+	PeriodLast30d   StatsPeriod = "last30d"
 	PeriodThisMonth StatsPeriod = "thisMonth"
+	PeriodLastMonth StatsPeriod = "lastMonth"
 )
 
 // AllPeriods 按展示顺序排列的全部周期（UI 提供今天/7天/本月，last24h 仅向后兼容旧设置）。
-var AllPeriods = []StatsPeriod{PeriodToday, PeriodLast7d, PeriodThisMonth}
+var AllPeriods = []StatsPeriod{PeriodToday, PeriodLast7d, PeriodLast30d, PeriodThisMonth, PeriodLastMonth}
 
 // Title 周期的中文标题。
 func (p StatsPeriod) Title() string {
@@ -26,8 +28,12 @@ func (p StatsPeriod) Title() string {
 		return "最近 24 小时"
 	case PeriodLast7d:
 		return "最近 7 天"
+	case PeriodLast30d:
+		return "最近 30 天"
 	case PeriodThisMonth:
 		return "本月"
+	case PeriodLastMonth:
+		return "上个月"
 	}
 	return string(p)
 }
@@ -35,7 +41,7 @@ func (p StatsPeriod) Title() string {
 // ParsePeriod 解析字符串为周期，非法值回退到 today。
 func ParsePeriod(raw string) StatsPeriod {
 	switch StatsPeriod(raw) {
-	case PeriodToday, PeriodLast24h, PeriodLast7d, PeriodThisMonth:
+	case PeriodToday, PeriodLast24h, PeriodLast7d, PeriodLast30d, PeriodThisMonth, PeriodLastMonth:
 		return StatsPeriod(raw)
 	}
 	return PeriodToday
@@ -73,6 +79,19 @@ func (p StatsPeriod) Window(now time.Time) StatsWindow {
 	case PeriodThisMonth:
 		y, m, _ := now.Date()
 		start = time.Date(y, m, 1, 0, 0, 0, 0, now.Location()).Unix()
+	case PeriodLast30d:
+		start = end - 30*86400
+	case PeriodLastMonth:
+		// 上个月整月：窗口严格为上个月 1 号 0 点到本月 1 号 0 点。
+		y, m, _ := now.Date()
+		firstThisMonth := time.Date(y, m, 1, 0, 0, 0, 0, now.Location())
+		firstLastMonth := firstThisMonth.AddDate(0, -1, 0)
+		return StatsWindow{
+			FilterStart:  firstLastMonth.Unix(),
+			FilterEnd:    firstThisMonth.Unix(),
+			RequestStart: firstLastMonth.Unix(),
+			RequestEnd:   firstThisMonth.Unix(),
+		}
 	}
 
 	hour := int64(3600)

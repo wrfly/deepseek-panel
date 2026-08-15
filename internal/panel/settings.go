@@ -53,7 +53,8 @@ func (s *Settings) Normalize() {
 		s.RefreshIntervalMinutes = 5
 	}
 	if s.Period != string(PeriodToday) && s.Period != string(PeriodLast24h) &&
-		s.Period != string(PeriodLast7d) && s.Period != string(PeriodThisMonth) {
+		s.Period != string(PeriodLast7d) && s.Period != string(PeriodLast30d) &&
+		s.Period != string(PeriodThisMonth) && s.Period != string(PeriodLastMonth) {
 		s.Period = string(PeriodToday)
 	}
 	if s.DisplayCurrency != "USD" && s.DisplayCurrency != "CNY" {
