@@ -70,7 +70,8 @@ type SettingsJSON struct {
 	UseMockData            bool               `json:"useMockData"`
 	DailyBudget            float64            `json:"dailyBudget"`
 	MonthlyBudget          float64            `json:"monthlyBudget"`
-	KeyBudgets             map[string]float64 `json:"keyBudgets"`
+	KeyDailyBudgets        map[string]float64 `json:"keyDailyBudgets"`
+	KeyMonthlyBudgets      map[string]float64 `json:"keyMonthlyBudgets"`
 	HeatmapMetric          string             `json:"heatmapMetric"`
 	TrayDisplay            string             `json:"trayDisplay"`
 	HasToken               bool               `json:"hasToken"`
@@ -79,12 +80,13 @@ type SettingsJSON struct {
 
 // BudgetStatus 单条预算进度：每日 / 每月 / 各 API Key。
 type BudgetStatus struct {
-	Label string  `json:"label"`         // 展示名："今日" / "本月" / Key 名
-	Used  float64 `json:"used"`          // 当前消耗（显示币种）
-	Limit float64 `json:"limit"`         // 预算上限
-	Ratio float64 `json:"ratio"`         // Used / Limit
-	Over  bool    `json:"over"`          // 是否超支
-	Key   string  `json:"key,omitempty"` // 非空表示某 Key 的预算
+	Label  string  `json:"label"`            // 展示名："今日" / "本月" / Key 名
+	Used   float64 `json:"used"`             // 当前消耗（显示币种）
+	Limit  float64 `json:"limit"`            // 预算上限
+	Ratio  float64 `json:"ratio"`            // Used / Limit
+	Over   bool    `json:"over"`             // 是否超支
+	Key    string  `json:"key,omitempty"`    // 非空表示某 Key 的预算
+	Period string  `json:"period,omitempty"` // "day" | "month"（Key 预算区分每日/每月）
 }
 
 // Snapshot 一次刷新后的完整快照。
@@ -100,6 +102,8 @@ type Snapshot struct {
 	Heatmap      [][]panel.HeatmapCell `json:"heatmap"`
 	HeatmapStart int64                 `json:"heatmapStart"`
 	Budgets      []BudgetStatus        `json:"budgets"`
+	TodayCost    float64               `json:"todayCost"`
+	MonthCost    float64               `json:"monthCost"`
 	Settings     SettingsJSON          `json:"settings"`
 	TrayTitle    string                `json:"trayTitle"`
 	TrayTooltip  string                `json:"trayTooltip"`
@@ -254,6 +258,7 @@ func (a *App) refresh() {
 		Settings:    a.settingsJSON(settings),
 	}
 
+	var client *deepseek.Client
 	if useMock {
 		summary, keys, amount, cost := a.mock.Fetch(window, tz)
 		report := panel.Build(keys, *amount, *cost, window, settings.DisplayCurrency)
@@ -271,7 +276,7 @@ func (a *App) refresh() {
 		if token == "" {
 			snap.ErrorMessage = "尚未配置 Token，请在“设置”中填写。"
 		} else {
-			client := deepseek.New(token)
+			client = deepseek.New(token)
 			a.ensureHourlyHistory(client, now, tz)
 			summary, keys, amount, cost, err := a.fetchAll(client, window, tz)
 			if err != nil {
@@ -306,7 +311,12 @@ func (a *App) refresh() {
 		}
 	}
 
-	snap.Budgets = a.budgetStatus(&snap, settings)
+	// 预算统计：今日/本月全局消耗 + 按 Key 的每日/每月消耗
+	keyCostsToday, keyCostsMonth := a.fetchKeyCostsBoth(client, now, tz, settings, useMock, &snap)
+	points := a.budgetPoints(&snap)
+	snap.TodayCost = sumCost(points, startOfDay(now).Unix(), now.Unix(), settings.DisplayCurrency)
+	snap.MonthCost = sumCost(points, monthStartUnix(now), now.Unix(), settings.DisplayCurrency)
+	snap.Budgets = a.budgetStatus(&snap, settings, keyCostsToday, keyCostsMonth)
 	if snap.Summary == nil && snap.ErrorMessage == "" && snap.Report.TotalTokens == 0 {
 		snap.IsLoading = true
 	}
@@ -611,7 +621,8 @@ func (a *App) settingsJSON(settings panel.Settings) SettingsJSON {
 		UseMockData:            settings.UseMockData,
 		DailyBudget:            settings.DailyBudget,
 		MonthlyBudget:          settings.MonthlyBudget,
-		KeyBudgets:             settings.KeyBudgets,
+		KeyDailyBudgets:        settings.KeyDailyBudgets,
+		KeyMonthlyBudgets:      settings.KeyMonthlyBudgets,
 		HeatmapMetric:          settings.HeatmapMetric,
 		TrayDisplay:            settings.TrayDisplay,
 		HasToken:               a.token() != "",
@@ -624,14 +635,14 @@ func (a *App) settingsJSON(settings panel.Settings) SettingsJSON {
 // budgetStatus 汇总预算状态：
 //   - 每日预算：今日 0 点起的消耗
 //   - 每月预算：本月 1 号起的消耗
-//   - 各 API Key 预算：当前查看周期的消耗（与 Key 行显示的金额一致）
+//   - 各 API Key 预算：每个 Key 的每日 + 每月消耗（费用按显示币种统计）
 //
 // 消耗金额按显示币种统计。
-func (a *App) budgetStatus(snap *Snapshot, settings panel.Settings) []BudgetStatus {
+func (a *App) budgetStatus(snap *Snapshot, settings panel.Settings, keyCostsToday, keyCostsMonth map[string]float64) []BudgetStatus {
 	currency := settings.DisplayCurrency
 	now := time.Now()
 	todayStart := startOfDay(now).Unix()
-	monthStart := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, now.Location()).Unix()
+	monthStart := monthStartUnix(now)
 	points := a.budgetPoints(snap)
 
 	var out []BudgetStatus
@@ -649,18 +660,34 @@ func (a *App) budgetStatus(snap *Snapshot, settings panel.Settings) []BudgetStat
 			Limit: settings.MonthlyBudget,
 		})
 	}
-	if len(settings.KeyBudgets) > 0 {
+	if len(settings.KeyDailyBudgets) > 0 || len(settings.KeyMonthlyBudgets) > 0 {
 		for _, key := range snap.Report.Keys {
-			limit, ok := settings.KeyBudgets[key.Name]
-			if !ok || limit <= 0 {
-				continue
+			if limit, ok := settings.KeyDailyBudgets[key.Name]; ok && limit > 0 {
+				used := 0.0
+				if keyCostsToday != nil {
+					used = keyCostsToday[key.Name]
+				}
+				out = append(out, BudgetStatus{
+					Label:  key.Name + " 今日",
+					Key:    key.Name,
+					Period: "day",
+					Used:   used,
+					Limit:  limit,
+				})
 			}
-			out = append(out, BudgetStatus{
-				Label: key.Name,
-				Key:   key.Name,
-				Used:  key.Cost,
-				Limit: limit,
-			})
+			if limit, ok := settings.KeyMonthlyBudgets[key.Name]; ok && limit > 0 {
+				used := 0.0
+				if keyCostsMonth != nil {
+					used = keyCostsMonth[key.Name]
+				}
+				out = append(out, BudgetStatus{
+					Label:  key.Name + " 本月",
+					Key:    key.Name,
+					Period: "month",
+					Used:   used,
+					Limit:  limit,
+				})
+			}
 		}
 	}
 	for i := range out {
@@ -670,6 +697,91 @@ func (a *App) budgetStatus(snap *Snapshot, settings panel.Settings) []BudgetStat
 		}
 	}
 	return out
+}
+
+// fetchKeyCostsBoth 获取按 Key 的今日/本月消耗：
+//   - 真实模式：仅在设置了对应 Key 预算时，并发拉取今日/本月窗口的 cost 接口；
+//   - 模拟模式：直接用 mock 快照里各 Key 的费用近似。
+func (a *App) fetchKeyCostsBoth(client *deepseek.Client, now time.Time, tz int, settings panel.Settings, useMock bool, snap *Snapshot) (today, month map[string]float64) {
+	if useMock {
+		today = map[string]float64{}
+		month = map[string]float64{}
+		for _, key := range snap.Report.Keys {
+			today[key.Name] = key.Cost
+			month[key.Name] = key.Cost
+		}
+		return today, month
+	}
+	needToday := len(settings.KeyDailyBudgets) > 0
+	needMonth := len(settings.KeyMonthlyBudgets) > 0
+	if client == nil || (!needToday && !needMonth) {
+		return nil, nil
+	}
+	type result struct {
+		m   map[string]float64
+		err error
+	}
+	ch := make(chan result, 2)
+	n := 0
+	if needToday {
+		n++
+		go func() {
+			w := panel.PeriodToday.Window(now)
+			m, err := fetchKeyCosts(client, w.RequestStart, w.RequestEnd, tz, settings.DisplayCurrency)
+			ch <- result{m: m, err: err}
+		}()
+	}
+	if needMonth {
+		n++
+		go func() {
+			w := panel.PeriodThisMonth.Window(now)
+			m, err := fetchKeyCosts(client, w.RequestStart, w.RequestEnd, tz, settings.DisplayCurrency)
+			ch <- result{m: m, err: err}
+		}()
+	}
+	for i := 0; i < n; i++ {
+		r := <-ch
+		if r.err != nil {
+			continue
+		}
+		if today == nil {
+			today = r.m
+		} else if month == nil {
+			month = r.m
+		}
+	}
+	return today, month
+}
+
+// fetchKeyCosts 拉取 [start,end) 窗口内按 Key 聚合的费用（显示币种）。
+func fetchKeyCosts(client *deepseek.Client, start, end int64, tz int, currency string) (map[string]float64, error) {
+	cost, err := client.FetchCost(start, end, tz)
+	if err != nil {
+		return nil, err
+	}
+	out := map[string]float64{}
+	if cost.Data == nil {
+		return out, nil
+	}
+	for _, currencySeries := range *cost.Data {
+		isUSD := currencySeries.Currency == "USD"
+		if (currency == "USD") != isUSD {
+			continue
+		}
+		for _, series := range currencySeries.Series {
+			var total float64
+			for _, bucket := range series.Buckets {
+				total += panel.ParseDecimal(bucket.Cost)
+			}
+			out[series.APIKey.Name] += total
+		}
+	}
+	return out, nil
+}
+
+// monthStartUnix 返回本月 1 号 0 点的 Unix 时间戳。
+func monthStartUnix(now time.Time) int64 {
+	return time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, now.Location()).Unix()
 }
 
 // budgetPoints 预算统计的数据源：优先本地小时缓存（覆盖 168 天，能完整统计今日/本月），
@@ -847,7 +959,8 @@ func (a *App) SaveSettings(s SettingsJSON) (SettingsJSON, error) {
 		UseMockData:            s.UseMockData,
 		DailyBudget:            s.DailyBudget,
 		MonthlyBudget:          s.MonthlyBudget,
-		KeyBudgets:             s.KeyBudgets,
+		KeyDailyBudgets:        s.KeyDailyBudgets,
+		KeyMonthlyBudgets:      s.KeyMonthlyBudgets,
 		HeatmapMetric:          s.HeatmapMetric,
 		TrayDisplay:            s.TrayDisplay,
 	}

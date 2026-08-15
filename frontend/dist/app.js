@@ -137,8 +137,10 @@ function render(snap) {
 }
 
 function renderAll(snap) {
-  // 设置页状态同步
+  // 设置页与预算页状态同步
   syncSettingsForm(snap);
+  syncBudgetForm(snap);
+  renderKeyBudgetInputs(snap);
 
   const loading = $("loading"), content = $("panel-content");
   if (snap.isLoading) { loading.hidden = false; content.hidden = true; return; }
@@ -150,6 +152,14 @@ function renderAll(snap) {
     banner.textContent = "\u26a0\ufe0f " + snap.errorMessage;
     banner.hidden = false;
   } else { banner.hidden = true; }
+
+  // 今天 ↔ 24小时 循环按钮状态
+  const todayBtn = $("period-today");
+  if (todayBtn) {
+    const is24h = snap.period === "last24h";
+    todayBtn.dataset.period = is24h ? "last24h" : "today";
+    todayBtn.textContent = is24h ? "24小时" : "今天";
+  }
 
   // 周期标签
   const moreLabels = { thisMonth: "本月", last30d: "30天", lastMonth: "上个月" };
@@ -167,7 +177,6 @@ function renderAll(snap) {
   [renderHero, renderBudget, renderModels, renderRequests, renderTrend, renderKeys, renderFooter, renderHeatmap].forEach((fn) => {
     try { fn(snap); } catch (e) { reportError(fn.name + ": " + e); }
   });
-  renderKeyBudgetInputs(snap);
 }
 
 function renderHero(snap) {
@@ -552,8 +561,6 @@ function syncSettingsForm(snap) {
   $("set-interval").value = String(s.refreshIntervalMinutes);
   $("set-period").value = s.period;
   $("set-currency").value = s.displayCurrency;
-  $("set-budget-daily").value = s.dailyBudget > 0 ? s.dailyBudget : "";
-  $("set-budget-monthly").value = s.monthlyBudget > 0 ? s.monthlyBudget : "";
   $("set-heatmap").value = s.heatmapMetric;
   $("set-tray").value = s.trayDisplay || "todayBoth";
   $("set-mock").checked = s.useMockData;
@@ -564,12 +571,27 @@ function syncSettingsForm(snap) {
   }
 }
 
-// API Key 预算输入行：按快照中的 key 列表动态补齐（已存在的行不覆盖，避免刷新时打断输入）
+// 预算页：全局每日/每月输入 + 当前消耗摘要
+function syncBudgetForm(snap) {
+  const s = snap.settings;
+  if (!$("set-budget-daily")) return;
+  $("set-budget-daily").value = s.dailyBudget > 0 ? s.dailyBudget : "";
+  $("set-budget-monthly").value = s.monthlyBudget > 0 ? s.monthlyBudget : "";
+  const sum = $("budget-summary");
+  if (sum) {
+    sum.textContent = "今日已用 " + formatMoney(snap.todayCost || 0, snap.currency) +
+      " \u00b7 本月已用 " + formatMoney(snap.monthCost || 0, snap.currency);
+  }
+}
+
+// API Key 预算输入行：按快照中的 key 列表动态补齐（已存在的行不覆盖，避免刷新时打断输入）。
+// 每个 Key 一行：每日 + 每月 两个输入框。
 function renderKeyBudgetInputs(snap) {
   const box = $("key-budget-fields");
   if (!box) return;
   const s = snap.settings || {};
-  const keyBudgets = s.keyBudgets || {};
+  const daily = s.keyDailyBudgets || {};
+  const monthly = s.keyMonthlyBudgets || {};
   const names = ((snap.report && snap.report.keys) || []).map((k) => k.name);
   // 移除已不存在的 key 输入行
   Array.prototype.slice.call(box.children).forEach((row) => {
@@ -585,16 +607,25 @@ function renderKeyBudgetInputs(snap) {
     }
     if (found) return;
     const row = el("div", "key-budget-field");
-    row.appendChild(el("label", "", name));
-    const input = el("input");
-    input.type = "number";
-    input.min = "0";
-    input.step = "0.01";
-    input.placeholder = "不设上限";
-    input.dataset.key = name;
-    const v = keyBudgets[name];
-    if (v > 0) input.value = String(v);
-    row.appendChild(input);
+    row.appendChild(el("label", "kb-name", name));
+    const col1 = el("div", "kb-col");
+    col1.appendChild(el("span", "kb-cap", "每日"));
+    const inD = el("input");
+    inD.type = "number"; inD.min = "0"; inD.step = "0.01"; inD.placeholder = "不设上限";
+    inD.dataset.key = name; inD.dataset.period = "day";
+    const vd = daily[name];
+    if (vd > 0) inD.value = String(vd);
+    col1.appendChild(inD);
+    row.appendChild(col1);
+    const col2 = el("div", "kb-col");
+    col2.appendChild(el("span", "kb-cap", "每月"));
+    const inM = el("input");
+    inM.type = "number"; inM.min = "0"; inM.step = "0.01"; inM.placeholder = "不设上限";
+    inM.dataset.key = name; inM.dataset.period = "month";
+    const vm = monthly[name];
+    if (vm > 0) inM.value = String(vm);
+    col2.appendChild(inM);
+    row.appendChild(col2);
     box.appendChild(row);
   });
 }
@@ -602,6 +633,7 @@ function renderKeyBudgetInputs(snap) {
 function showView(view) {
   $("view-panel").hidden = view !== "panel";
   $("view-settings").hidden = view !== "settings";
+  $("view-budget").hidden = view !== "budget";
 }
 
 /* ---------------- 事件与绑定 ---------------- */
@@ -609,21 +641,16 @@ async function saveSettings() {
   const msg = $("save-msg");
   msg.textContent = "\u4fdd\u5b58\u4e2d\u2026";
   try {
-    const budgetDaily = parseFloat($("set-budget-daily").value);
-    const budgetMonthly = parseFloat($("set-budget-monthly").value);
-    const keyBudgets = {};
-    document.querySelectorAll("#key-budget-fields input").forEach((inp) => {
-      const v = parseFloat(inp.value);
-      if (!isNaN(v) && v > 0) keyBudgets[inp.dataset.key] = v;
-    });
+    const cur = (state.snapshot && state.snapshot.settings) || {};
     const s = {
       refreshIntervalMinutes: parseInt($("set-interval").value, 10),
       period: $("set-period").value,
       displayCurrency: $("set-currency").value,
       useMockData: $("set-mock").checked,
-      dailyBudget: isNaN(budgetDaily) ? 0 : budgetDaily,
-      monthlyBudget: isNaN(budgetMonthly) ? 0 : budgetMonthly,
-      keyBudgets: keyBudgets,
+      dailyBudget: cur.dailyBudget || 0,
+      monthlyBudget: cur.monthlyBudget || 0,
+      keyDailyBudgets: cur.keyDailyBudgets || {},
+      keyMonthlyBudgets: cur.keyMonthlyBudgets || {},
       heatmapMetric: $("set-heatmap").value,
       trayDisplay: $("set-tray").value,
       launchAtLogin: $("set-autostart").checked,
@@ -645,13 +672,61 @@ async function saveSettings() {
   }
 }
 
+// 预算管理页保存
+async function saveBudget() {
+  const msg = $("budget-save-msg");
+  msg.textContent = "保存中…";
+  try {
+    const cur = (state.snapshot && state.snapshot.settings) || {};
+    const budgetDaily = parseFloat($("set-budget-daily").value);
+    const budgetMonthly = parseFloat($("set-budget-monthly").value);
+    const keyDailyBudgets = {};
+    const keyMonthlyBudgets = {};
+    document.querySelectorAll("#key-budget-fields input").forEach((inp) => {
+      const v = parseFloat(inp.value);
+      if (isNaN(v) || v <= 0) return;
+      if (inp.dataset.period === "day") keyDailyBudgets[inp.dataset.key] = v;
+      else keyMonthlyBudgets[inp.dataset.key] = v;
+    });
+    const s = {
+      refreshIntervalMinutes: cur.refreshIntervalMinutes || 5,
+      period: cur.period || "today",
+      displayCurrency: cur.displayCurrency || "CNY",
+      useMockData: !!cur.useMockData,
+      dailyBudget: isNaN(budgetDaily) ? 0 : budgetDaily,
+      monthlyBudget: isNaN(budgetMonthly) ? 0 : budgetMonthly,
+      keyDailyBudgets: keyDailyBudgets,
+      keyMonthlyBudgets: keyMonthlyBudgets,
+      heatmapMetric: cur.heatmapMetric || "tokens",
+      trayDisplay: cur.trayDisplay || "todayBoth",
+      launchAtLogin: !!cur.launchAtLogin,
+    };
+    try {
+      const updated = await window.go.main.App.SaveSettings(s);
+      msg.textContent = "已保存";
+      state.heatmapMetric = updated.heatmapMetric;
+    } catch (e) {
+      msg.textContent = "已保存，但自动启动设置失败：" + e;
+    }
+    setTimeout(() => { msg.textContent = ""; }, 3000);
+  } catch (e) {
+    msg.textContent = "保存失败：" + e;
+  }
+}
+
 function bindUI() {
-  // 周期标签
+  // 周期标签（今天/本月 为循环按钮，单独绑定）
   document.querySelectorAll("#period-tabs button").forEach((b) => {
-    if (b.id === "period-more") return;
+    if (b.id === "period-more" || b.id === "period-today") return;
     b.addEventListener("click", () => {
       window.go.main.App.SetPeriod(b.dataset.period);
     });
+  });
+
+  // 今天 → 24小时 → 今天 循环切换
+  $("period-today").addEventListener("click", () => {
+    const next = $("period-today").dataset.period === "last24h" ? "today" : "last24h";
+    window.go.main.App.SetPeriod(next);
   });
 
   // 本月 → 30天 → 上个月 → 本月 循环切换
@@ -664,8 +739,11 @@ function bindUI() {
   });
   $("btn-refresh").addEventListener("click", () => window.go.main.App.RefreshNow());
   $("btn-settings").addEventListener("click", () => showView("settings"));
+  $("btn-budget").addEventListener("click", () => showView("budget"));
   $("btn-back").addEventListener("click", () => showView("panel"));
+  $("btn-budget-back").addEventListener("click", () => showView("panel"));
   $("btn-save").addEventListener("click", saveSettings);
+  $("btn-budget-save").addEventListener("click", saveBudget);
 
   // 趋势切换
   $("pill-cost").addEventListener("click", () => { state.trendMode = "cost"; if (state.snapshot) renderTrend(state.snapshot); });
@@ -786,13 +864,18 @@ function mockSnapshot() {
     budgets: [
       { label: "今日", used: 3.52, limit: 10, ratio: 0.352, over: false },
       { label: "本月", used: 62.1, limit: 200, ratio: 0.3105, over: false },
-      { label: "claude", key: "claude", used: 11.27, limit: 50, ratio: 0.2254, over: false },
-      { label: "codex", key: "codex", used: 31.23, limit: 40, ratio: 0.7808, over: false },
+      { label: "claude 今日", key: "claude", period: "day", used: 0.9, limit: 20, ratio: 0.045, over: false },
+      { label: "claude 本月", key: "claude", period: "month", used: 11.27, limit: 50, ratio: 0.2254, over: false },
+      { label: "codex 今日", key: "codex", period: "day", used: 2.1, limit: 20, ratio: 0.105, over: false },
+      { label: "codex 本月", key: "codex", period: "month", used: 31.23, limit: 40, ratio: 0.7808, over: false },
     ],
+    todayCost: 3.52,
+    monthCost: 62.1,
     settings: {
       refreshIntervalMinutes: 5, period: "today", displayCurrency: "CNY",
       useMockData: true, dailyBudget: 10, monthlyBudget: 200,
-      keyBudgets: { claude: 50, codex: 40 },
+      keyDailyBudgets: { claude: 20, codex: 20 },
+      keyMonthlyBudgets: { claude: 50, codex: 40 },
       heatmapMetric: "tokens", trayDisplay: "todayBoth",
       hasToken: true, launchAtLogin: false,
     },
@@ -812,8 +895,11 @@ function bindUI_light() {
   });
   $("btn-refresh").addEventListener("click", () => render(mockSnapshot()));
   $("btn-settings").addEventListener("click", () => showView("settings"));
+  $("btn-budget").addEventListener("click", () => showView("budget"));
   $("btn-back").addEventListener("click", () => showView("panel"));
+  $("btn-budget-back").addEventListener("click", () => showView("panel"));
   $("btn-save").addEventListener("click", () => { $("save-msg").textContent = "演示模式：设置不会真正保存"; });
+  $("btn-budget-save").addEventListener("click", () => { $("budget-save-msg").textContent = "演示模式：设置不会真正保存"; });
   $("pill-cost").addEventListener("click", () => { state.trendMode = "cost"; if (state.snapshot) renderTrend(state.snapshot); });
   $("pill-token").addEventListener("click", () => { state.trendMode = "tokens"; if (state.snapshot) renderTrend(state.snapshot); });
   $("set-mock").addEventListener("change", () => { state.heatmapMetric = $("set-heatmap").value; });

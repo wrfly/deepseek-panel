@@ -32,7 +32,9 @@ type Settings struct {
 	Budget                 float64            `json:"budget"` // 旧版单值预算，仅用于迁移
 	DailyBudget            float64            `json:"dailyBudget"`
 	MonthlyBudget          float64            `json:"monthlyBudget"`
-	KeyBudgets             map[string]float64 `json:"keyBudgets"`
+	KeyBudgets             map[string]float64 `json:"keyBudgets"` // 旧版按 Key 预算，仅用于迁移
+	KeyDailyBudgets        map[string]float64 `json:"keyDailyBudgets"`
+	KeyMonthlyBudgets      map[string]float64 `json:"keyMonthlyBudgets"`
 	HeatmapMetric          string             `json:"heatmapMetric"` // "tokens" | "cost"
 	TrayDisplay            string             `json:"trayDisplay"`   // TrayDisplay 常量
 }
@@ -47,7 +49,9 @@ func WithDefaults() Settings {
 		Budget:                 0,
 		DailyBudget:            0,
 		MonthlyBudget:          0,
-		KeyBudgets:             map[string]float64{},
+		KeyBudgets:             nil,
+		KeyDailyBudgets:        map[string]float64{},
+		KeyMonthlyBudgets:      map[string]float64{},
 		HeatmapMetric:          "tokens",
 		TrayDisplay:            string(TrayBoth),
 	}
@@ -71,18 +75,31 @@ func (s *Settings) Normalize() {
 		s.DailyBudget = s.Budget
 	}
 	s.Budget = 0
+	// 旧版按 Key 预算（当前周期语义）迁移为每月预算（仅迁移一次）
+	if len(s.KeyBudgets) > 0 && len(s.KeyMonthlyBudgets) == 0 {
+		s.KeyMonthlyBudgets = s.KeyBudgets
+	}
+	s.KeyBudgets = nil
 	if s.DailyBudget < 0 {
 		s.DailyBudget = 0
 	}
 	if s.MonthlyBudget < 0 {
 		s.MonthlyBudget = 0
 	}
-	if s.KeyBudgets == nil {
-		s.KeyBudgets = map[string]float64{}
+	if s.KeyDailyBudgets == nil {
+		s.KeyDailyBudgets = map[string]float64{}
 	}
-	for k, v := range s.KeyBudgets {
+	if s.KeyMonthlyBudgets == nil {
+		s.KeyMonthlyBudgets = map[string]float64{}
+	}
+	for k, v := range s.KeyDailyBudgets {
 		if v < 0 {
-			delete(s.KeyBudgets, k)
+			delete(s.KeyDailyBudgets, k)
+		}
+	}
+	for k, v := range s.KeyMonthlyBudgets {
+		if v < 0 {
+			delete(s.KeyMonthlyBudgets, k)
 		}
 	}
 	if s.HeatmapMetric != "cost" {

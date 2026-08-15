@@ -149,17 +149,24 @@ body {
 
 /* 设置页 */
 .settings-form { display: flex; flex-direction: column; gap: 14px; }
+.budget-summary {
+  background: var(--bg-panel); border: 1px solid var(--hairline); border-radius: 6px;
+  padding: 8px 10px; font-size: 11px; color: var(--fg-dim); line-height: 1.6;
+  font-variant-numeric: tabular-nums;
+}
 .key-budget-field { display: flex; align-items: center; gap: 8px; margin: 4px 0; }
-.field .key-budget-field label {
+.field .key-budget-field .kb-name {
   flex: 1; min-width: 0; margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   font-size: 11px; font-weight: 500; color: var(--fg-dim);
 }
-.key-budget-field input {
-  width: 130px; flex: none; background: var(--bg-panel); border: 1px solid var(--hairline); color: var(--fg);
-  border-radius: 6px; padding: 5px 8px; font-size: 11px; font-family: inherit; outline: none;
+.kb-col { display: flex; flex-direction: column; gap: 1px; flex: none; }
+.kb-col .kb-cap { font-size: 8px; color: var(--fg-faint); line-height: 1.2; }
+.kb-col input {
+  width: 84px; background: var(--bg-panel); border: 1px solid var(--hairline); color: var(--fg);
+  border-radius: 6px; padding: 4px 7px; font-size: 11px; font-family: inherit; outline: none;
   color-scheme: dark; accent-color: var(--accent);
 }
-.key-budget-field input:focus { border-color: var(--accent); }
+.kb-col input:focus { border-color: var(--accent); }
 .field label { display: block; font-size: 11px; font-weight: 600; margin-bottom: 5px; }
 .field input[type="text"], .field input[type="password"], .field input[type="number"], .field select {
   width: 100%; background: var(--bg-panel); border: 1px solid var(--hairline); color: var(--fg);
