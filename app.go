@@ -352,6 +352,13 @@ func (a *App) refresh() {
 		fmt.Fprintf(os.Stderr, "DEBUG snapshot: period=%s tokens=%d cost=%.2f keys=%d trend=%d heatmap=%d nonZero=%d maxToken=%.0f err=%q\n",
 			snap.Period, snap.Report.TotalTokens, snap.Report.TotalCost,
 			len(snap.Report.Keys), len(snap.Report.Trend), len(snap.Heatmap), nonZero, maxV, snap.ErrorMessage)
+		if snap.Summary != nil {
+			for _, w := range snap.Summary.NormalWallets {
+				fmt.Fprintf(os.Stderr, "DEBUG wallet: %s balance=%s\n", w.Currency, w.Balance)
+			}
+		} else {
+			fmt.Fprintln(os.Stderr, "DEBUG wallet: SUMMARY IS NIL")
+		}
 	}
 }
 

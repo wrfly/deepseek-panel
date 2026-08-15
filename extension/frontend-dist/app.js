@@ -192,10 +192,10 @@ function renderHero(snap) {
   $("hero-left-sub").textContent = leftSub;
 
   let rightSub = "";
-  const wallets = (snap.summary && snap.summary.normalWallets) || [];
+  const wallets = (snap.summary && snap.summary.normal_wallets) || [];
   const wallet = wallets.find((w) => w.currency === snap.currency) || wallets[0];
   if (wallet) rightSub += "\u4f59\u989d " + formatMoney(parseFloat(wallet.balance), wallet.currency);
-  const totals = (snap.summary && snap.summary.totalCosts) || [];
+  const totals = (snap.summary && snap.summary.total_costs) || [];
   const spent = totals.find((t) => t.currency === snap.currency);
   if (spent) {
     if (rightSub) rightSub += " \u00b7 ";
@@ -835,12 +835,12 @@ function mockSnapshot() {
   const totalCost = models.reduce((s, m) => s + m.cost, 0);
   return {
     summary: {
-      normalWallets: [
-        { currency: "USD", balance: "8.4200000000", tokenEstimation: "0" },
-        { currency: "CNY", balance: "3.1400000000", tokenEstimation: "0" },
+      normal_wallets: [
+        { currency: "USD", balance: "8.4200000000", token_estimation: "0" },
+        { currency: "CNY", balance: "3.1400000000", token_estimation: "0" },
       ],
-      bonusWallets: [{ currency: "USD", balance: "0", tokenEstimation: "0" }],
-      totalCosts: [
+      bonus_wallets: [{ currency: "USD", balance: "0", token_estimation: "0" }],
+      total_costs: [
         { currency: "USD", amount: "0.8800000000" },
         { currency: "CNY", amount: "1.2300000000" },
       ],
