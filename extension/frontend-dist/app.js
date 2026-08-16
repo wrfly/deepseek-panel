@@ -30,12 +30,12 @@ const trendHover = {
   active: false,
   box: null,
   points: null,
-  values: null,
-  isCost: false,
+  costValues: null,
+  tokenValues: null,
   showHour: true,
   fmt: null,
   currency: "CNY",
-  bars: [],
+  cols: [],
   hoverIndex: -1,
 };
 function bindTrendHover() {
@@ -49,7 +49,7 @@ function bindTrendHover() {
     if (!inside) {
       if (st.active) {
         st.active = false;
-        if (st.hoverIndex >= 0 && st.bars[st.hoverIndex]) st.bars[st.hoverIndex].classList.remove("hover");
+        if (st.hoverIndex >= 0 && st.cols[st.hoverIndex]) st.cols[st.hoverIndex].classList.remove("hover");
         st.hoverIndex = -1;
         const hv = $("trend-hover");
         if (hv) hv.textContent = "";
@@ -60,16 +60,16 @@ function bindTrendHover() {
     const fraction = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
     const index = Math.min(st.points.length - 1, Math.floor(fraction * st.points.length));
     if (index !== st.hoverIndex) {
-      if (st.hoverIndex >= 0 && st.bars[st.hoverIndex]) st.bars[st.hoverIndex].classList.remove("hover");
+      if (st.hoverIndex >= 0 && st.cols[st.hoverIndex]) st.cols[st.hoverIndex].classList.remove("hover");
       st.hoverIndex = index;
-      if (st.bars[index]) st.bars[index].classList.add("hover");
+      if (st.cols[index]) st.cols[index].classList.add("hover");
     }
     const pt = st.points[index];
     const time = st.showHour ? st.fmt(pt.time) : fmtTime(pt.time, true);
-    const val = st.isCost ? formatMoney(st.values[index], st.currency)
-                         : formatTokens(st.values[index]) + " Token";
+    const cost = st.costValues[index];
+    const tokens = st.tokenValues[index];
     const hv = $("trend-hover");
-    if (hv) hv.textContent = time + "  " + val;
+    if (hv) hv.textContent = time + "  " + formatMoney(cost, st.currency) + " \u00b7 " + formatTokens(tokens) + " Token";
   });
 }
 bindTrendHover();
@@ -100,7 +100,6 @@ const paletteColor = (i) => PALETTE[i % PALETTE.length];
 /* ---------------- 状态 ---------------- */
 const state = {
   snapshot: null,
-  trendMode: "cost",        // cost | tokens
   heatmapMetric: "tokens",  // tokens | cost
   heatmapHover: null,       // {row, col, x, y}
   trendChart: null,
@@ -222,31 +221,28 @@ function renderBudget(snap) {
 
 function renderModels(snap) {
   const r = snap.report || {};
-  // Token 行
-  const tokenBox = $("model-token-rows");
-  tokenBox.innerHTML = "";
-  if (!(r.models || []).length) { tokenBox.appendChild(el("div", "empty-tip", "\u6682\u65e0\u6570\u636e")); }
-  else {
-    const total = (r.models || []).reduce((s, m) => s + m.tokens, 0);
-    (r.models || []).forEach((m, i) => {
-      const row = el("div", "model-row");
-      row.appendChild(el("span", "dot", "")).style.background = paletteColor(i);
-      row.appendChild(el("span", "name", m.name));
-      const share = total > 0 ? m.tokens / total : 0;
-      row.appendChild(el("span", "stat", formatTokens(m.tokens) + " \u00b7 " + formatPercent(share)));
-      tokenBox.appendChild(row);
-    });
-  }
-  // 费用行（按费用降序）
-  const costBox = $("model-cost-rows");
-  costBox.innerHTML = "";
-  const costSorted = [...(r.models || [])].sort((a, b) => b.cost - a.cost || (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
-  costSorted.forEach((m, i) => {
+  const box = $("model-rows");
+  if (!box) return;
+  box.innerHTML = "";
+
+  // 合并展示：每个模型一行，左侧 Token（含占比），右侧费用，按费用降序（与「各 Key 用量」一致）。
+  const models = [...(r.models || [])].sort((a, b) => b.cost - a.cost || (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
+  if (!models.length) { box.appendChild(el("div", "empty-tip", "\u6682\u65e0\u6570\u636e")); return; }
+
+  const total = models.reduce((s, m) => s + m.tokens, 0);
+  models.forEach((m, i) => {
     const row = el("div", "model-row");
     row.appendChild(el("span", "dot", "")).style.background = paletteColor(i);
-    row.appendChild(el("span", "name", m.name));
-    row.appendChild(el("span", "money", formatMoney(m.cost, snap.currency)));
-    costBox.appendChild(row);
+    const main = el("div", "model-main");
+    const line1 = el("div", "model-line1");
+    line1.appendChild(el("span", "model-name", m.name));
+    main.appendChild(line1);
+    const share = total > 0 ? m.tokens / total : 0;
+    main.appendChild(el("div", "model-line2",
+      formatTokens(m.tokens) + " Token \u00b7 " + formatPercent(share)));
+    row.appendChild(main);
+    row.appendChild(el("span", "model-cost", formatMoney(m.cost, snap.currency)));
+    box.appendChild(row);
   });
 }
 
@@ -257,10 +253,7 @@ function renderRequests(snap) {
 
 function renderTrend(snap) {
   const r = snap.report || {};
-  const isCost = state.trendMode === "cost";
-  $("trend-title").textContent = isCost ? "\u8d39\u7528\u8d8b\u52bf" : "Token \u8d8b\u52bf";
-  $("pill-cost").classList.toggle("selected", isCost);
-  $("pill-token").classList.toggle("selected", !isCost);
+  $("trend-title").textContent = "\u8d39\u7528 / Token \u8d8b\u52bf";
 
   const points = r.trend || [];
   const first = points.length ? points[0].time : 0;
@@ -294,37 +287,47 @@ function renderTrend(snap) {
     return String(d.getHours()).padStart(2, "0") + ":00";
   };
 
-  // 纯 DOM 柱状图：WebKitGTK 的 canvas 颜色渲染不可靠，ECharts 渲染异常。
-  const values = dispPoints.map((p) => isCost ? (snap.currency === "USD" ? p.costUSD : p.costCNY) : p.tokens);
-  const maxV = Math.max.apply(null, values.concat([0]));
+  // 纯 DOM 双柱图：WebKitGTK 的 canvas 颜色渲染不可靠，ECharts 渲染异常。
+  // 每个时间点两根柱子：费用（浅蓝）与 Token（浅绿），各自归一化到最高值。
+  const costValues = dispPoints.map((p) => (snap.currency === "USD" ? p.costUSD : p.costCNY));
+  const tokenValues = dispPoints.map((p) => p.tokens);
+  const maxCost = Math.max.apply(null, costValues.concat([0]));
+  const maxToken = Math.max.apply(null, tokenValues.concat([0]));
   const box = $("trend-bars");
   const empty = $("trend-empty");
   box.innerHTML = "";
 
-  if (!points.length || maxV <= 0) {
+  if (!points.length || (maxCost <= 0 && maxToken <= 0)) {
     empty.textContent = "\u6682\u65e0\u8d8b\u52bf\u6570\u636e";
     empty.hidden = false;
   } else {
     empty.hidden = true;
-    const bars = [];
-    values.forEach((v, i) => {
-      const bar = el("div", "bar");
-      const h = v > 0 ? Math.max((v / maxV) * 100, 3) : 0;
-      bar.style.height = h + "%";
-      if (v <= 0) bar.style.opacity = "0.15";
-      bars.push(bar);
-      box.appendChild(bar);
+    const cols = [];
+    dispPoints.forEach((p, i) => {
+      const col = el("div", "trend-col");
+      const costBar = el("div", "bar cost");
+      const costH = maxCost > 0 && costValues[i] > 0 ? Math.max((costValues[i] / maxCost) * 100, 3) : 0;
+      costBar.style.height = costH + "%";
+      if (costValues[i] <= 0) costBar.style.opacity = "0.15";
+      const tokenBar = el("div", "bar token");
+      const tokenH = maxToken > 0 && tokenValues[i] > 0 ? Math.max((tokenValues[i] / maxToken) * 100, 3) : 0;
+      tokenBar.style.height = tokenH + "%";
+      if (tokenValues[i] <= 0) tokenBar.style.opacity = "0.15";
+      col.appendChild(costBar);
+      col.appendChild(tokenBar);
+      cols.push(col);
+      box.appendChild(col);
     });
 
     // 填充浮停状态（文档级 mousemove 统一处理）
     trendHover.box = box;
     trendHover.points = dispPoints;
-    trendHover.values = values;
-    trendHover.isCost = isCost;
+    trendHover.costValues = costValues;
+    trendHover.tokenValues = tokenValues;
     trendHover.showHour = !byDay;
     trendHover.fmt = byDay ? dayFmt : hourFmt;
     trendHover.currency = snap.currency || "CNY";
-    trendHover.bars = bars;
+    trendHover.cols = cols;
     trendHover.hoverIndex = -1;
     trendHover.active = false;
     const hv = $("trend-hover");
@@ -741,10 +744,6 @@ function bindUI() {
   $("btn-save").addEventListener("click", saveSettings);
   $("btn-budget-save").addEventListener("click", saveBudget);
 
-  // 趋势切换
-  $("pill-cost").addEventListener("click", () => { state.trendMode = "cost"; if (state.snapshot) renderTrend(state.snapshot); });
-  $("pill-token").addEventListener("click", () => { state.trendMode = "tokens"; if (state.snapshot) renderTrend(state.snapshot); });
-
   // 托盘导航
   window.runtime.EventsOn("nav", (page) => showView(page === "settings" ? "settings" : "panel"));
 
@@ -897,8 +896,6 @@ function bindUI_light() {
   $("btn-budget-back").addEventListener("click", () => showView("panel"));
   $("btn-save").addEventListener("click", () => { $("save-msg").textContent = "演示模式：设置不会真正保存"; });
   $("btn-budget-save").addEventListener("click", () => { $("budget-save-msg").textContent = "演示模式：设置不会真正保存"; });
-  $("pill-cost").addEventListener("click", () => { state.trendMode = "cost"; if (state.snapshot) renderTrend(state.snapshot); });
-  $("pill-token").addEventListener("click", () => { state.trendMode = "tokens"; if (state.snapshot) renderTrend(state.snapshot); });
   $("set-mock").addEventListener("change", () => { state.heatmapMetric = $("set-heatmap").value; });
 }
 

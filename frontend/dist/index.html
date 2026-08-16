@@ -48,13 +48,9 @@
 
       <div class="hairline"></div>
 
-      <!-- 按模型 Token -->
-      <div class="section-title">按模型 · Token</div>
-      <div class="model-rows" id="model-token-rows"></div>
-
-      <!-- 按模型 费用 -->
-      <div class="section-title">按模型 · 费用</div>
-      <div class="model-rows" id="model-cost-rows"></div>
+      <!-- 按模型 Token / 费用（合并展示） -->
+      <div class="section-title">按模型 用量</div>
+      <div class="model-rows" id="model-rows"></div>
 
       <div class="hairline"></div>
 
@@ -63,12 +59,12 @@
         <span class="value" id="requests-value">—</span>
       </div>
 
-      <!-- 趋势图 -->
+      <!-- 趋势图（费用 + Token 合并双柱） -->
       <div class="trend-header">
-        <span class="section-title" id="trend-title">费用趋势</span>
-        <div class="toggle-pills">
-          <button id="pill-cost" class="pill">费用</button>
-          <button id="pill-token" class="pill">Token</button>
+        <span class="section-title" id="trend-title">费用 / Token 趋势</span>
+        <div class="trend-legend">
+          <span class="legend-item"><span class="legend-dot legend-cost"></span>费用</span>
+          <span class="legend-item"><span class="legend-dot legend-token"></span>Token</span>
         </div>
       </div>
       <div id="trend-chart" class="trend-chart"><div class="bars" id="trend-bars"></div><div class="trend-empty" id="trend-empty" hidden></div></div>

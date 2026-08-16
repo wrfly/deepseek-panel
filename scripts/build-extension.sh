@@ -4,6 +4,7 @@
 set -e
 cd "$(dirname "$0")/.."
 
+rm -rf extension/frontend-dist
 cp -r frontend/dist extension/frontend-dist
 
 for f in extension/background.js extension/popup.js extension/lib/*.js; do

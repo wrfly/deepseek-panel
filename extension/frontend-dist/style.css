@@ -84,31 +84,35 @@ body {
 /* 区块标题 */
 .section-title { font-size: 10px; font-weight: 600; margin: 4px 0 3px; }
 
-/* 模型行 */
-.model-rows { display: flex; flex-direction: column; gap: 1px; margin-bottom: 6px; }
-.model-row { display: flex; align-items: center; gap: 6px; height: 14px; font-size: 11px; }
-.model-row .dot { width: 6px; height: 6px; border-radius: 50%; flex: none; }
-.model-row .name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 500; }
-.model-row .stat { color: var(--fg-dim); font-size: 10px; font-variant-numeric: tabular-nums; white-space: nowrap; }
-.model-row .money { font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
+/* 模型行（与「各 Key 用量」同款两行布局） */
+.model-rows { display: flex; flex-direction: column; justify-content: center; gap: 0; margin-bottom: 6px; }
+.model-row { display: flex; align-items: center; gap: 6px; height: 32px; min-width: 0; }
+.model-row .dot { width: 8px; height: 8px; border-radius: 50%; flex: none; }
+.model-main { flex: 1; min-width: 0; }
+.model-line1 { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.model-name { font-size: 11px; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.model-line2 { font-size: 10px; color: var(--fg-dim); font-variant-numeric: tabular-nums; margin-top: 1px; }
+.model-cost { font-size: 12px; font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .empty-tip { color: var(--fg-faint); font-size: 10px; text-align: center; padding: 4px 0; }
 
 /* 请求行 */
 .requests-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px; }
 .requests-row .value { font-size: 10px; font-variant-numeric: tabular-nums; }
 
-/* 趋势 */
+/* 趋势（费用 + Token 合并双柱） */
 .trend-header { display: flex; justify-content: space-between; align-items: center; }
-.toggle-pills { display: flex; gap: 6px; }
-.pill {
-  border: none; border-radius: 10px; padding: 2px 12px; font-size: 9px; font-weight: 600;
-  background: var(--pill-bg); color: var(--fg-dim); cursor: pointer; font-family: inherit;
-}
-.pill.selected { background: var(--accent); color: #fff; }
+.trend-legend { display: flex; gap: 8px; }
+.legend-item { display: flex; align-items: center; gap: 3px; font-size: 9px; color: var(--fg-dim); }
+.legend-dot { width: 7px; height: 7px; border-radius: 2px; flex: none; }
+.legend-dot.legend-cost { background: var(--trend-cost, #7fb3f7); }
+.legend-dot.legend-token { background: var(--trend-token, #7fe0a8); }
 .trend-chart { height: 50px; margin-top: 0; position: relative; }
 .trend-chart .bars { display: flex; align-items: flex-end; gap: 2px; height: 100%; }
-.trend-chart .bar { flex: 1; background: var(--accent); border-radius: 2px 2px 0 0; opacity: 0.55; min-width: 2px; cursor: default; }
-.trend-chart .bar:hover, .trend-chart .bar.hover { opacity: 1; }
+.trend-col { flex: 1; display: flex; align-items: flex-end; gap: 1px; height: 100%; min-width: 0; }
+.trend-chart .bar { flex: 1; min-width: 0; border-radius: 1px 1px 0 0; opacity: 0.55; cursor: default; }
+.trend-chart .bar.cost { background: var(--trend-cost, #7fb3f7); }
+.trend-chart .bar.token { background: var(--trend-token, #7fe0a8); }
+.trend-col.hover .bar { opacity: 1; }
 .trend-empty { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 10px; color: var(--fg-faint); }
 .axis-row { display: flex; gap: 2px; margin-top: 4px; }
 .axis-label { font-size: 9px; color: var(--fg-faint); }
