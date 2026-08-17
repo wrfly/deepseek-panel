@@ -2,6 +2,12 @@
 #import <Cocoa/Cocoa.h>
 #include <string.h>
 
+// cgo 导出的回调（由 internal/tray/darwin/tray.go 的 //export 生成）。
+extern void trayOpenClicked(void);
+extern void traySettingsClicked(void);
+extern void trayUsageClicked(void);
+extern void trayQuitClicked(void);
+
 static NSStatusItem *g_statusItem = nil;
 static NSMenu *g_menu = nil;
 
@@ -31,6 +37,13 @@ static void trayDispatch(void (^block)(void)) {
 }
 
 void tray_start(const char *title, const char *tooltip) {
+    // 绑定 cgo 导出的回调（Linux 版通过 GCallback 直接绑定；
+    // macOS 版经函数指针间接层，必须在这里赋值，否则点击菜单无反应）。
+    g_open = &trayOpenClicked;
+    g_settings = &traySettingsClicked;
+    g_usage = &trayUsageClicked;
+    g_quit = &trayQuitClicked;
+
     // dispatch 是异步的，这里立即拷贝字符串，避免 Go 侧提前释放。
     char *titleCopy = strdup(title ? title : "");
     char *tooltipCopy = strdup(tooltip ? tooltip : "");
@@ -76,6 +89,16 @@ void tray_start(const char *title, const char *tooltip) {
         [g_menu addItem:quitItem];
 
         g_statusItem.menu = g_menu;
+
+        // Wails 的 AppDelegate 在启动时会强制 setActivationPolicy(Regular)，
+        // 覆盖 Info.plist 的 LSUIElement，导致出现 Dock 图标。
+        // 等 applicationDidFinishLaunching 结束后切回 accessory（仅菜单栏）。
+        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(1.0 * NSEC_PER_SEC)),
+                       dispatch_get_main_queue(), ^{
+            if ([NSApp activationPolicy] != NSApplicationActivationPolicyAccessory) {
+                [NSApp setActivationPolicy:NSApplicationActivationPolicyAccessory];
+            }
+        });
         free(titleCopy);
         free(tooltipCopy);
     });
